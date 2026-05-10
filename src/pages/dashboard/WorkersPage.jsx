@@ -68,6 +68,12 @@ const WorkersPage = () => {
 
       if (error) throw error;
 
+      
+      await supabase.from('system_logs').insert([{
+        action_type: 'Worker Added',
+        details: `Added new worker: ${formData.first_name} ${formData.last_name} (${formData.skill_set})`
+      }]);
+
       setWorkers([data[0], ...workers]);
       setIsModalOpen(false);
 

@@ -27,6 +27,46 @@ const PayrollPage = () => {
     }
   };
 
+  const runPayroll = async () => {
+    try {
+      setLoading(true);
+      
+      const { data: workers, error: workerError } = await supabase
+        .from('workers')
+        .select('*')
+        .eq('status', 'Active');
+      
+      if (workerError) throw workerError;
+
+      const payrollEntries = workers.map(w => ({
+        user_id: w.user_id,
+        gross_pay: w.daily_rate * 30, 
+        net_pay: (w.daily_rate * 30) * 0.95, 
+        pay_period: `${new Date().toLocaleString('default', { month: 'long' })} ${new Date().getFullYear()}`,
+        status: 'Pending'
+      }));
+
+      const { error: payrollError } = await supabase
+        .from('payroll_records')
+        .insert(payrollEntries);
+
+      if (payrollError) throw payrollError;
+
+      
+      await supabase.from('system_logs').insert([{
+        action_type: 'Payroll Generated',
+        details: `Generated payroll for ${workers.length} active workers.`
+      }]);
+
+      fetchPayroll();
+      alert('Payroll generated successfully!');
+    } catch (err) {
+      alert('Failed to generate payroll: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const markAsPaid = async (id) => {
     try {
       const { error } = await supabase
@@ -34,6 +74,12 @@ const PayrollPage = () => {
         .update({ status: 'Paid' })
         .eq('payroll_id', id);
       if (error) throw error;
+
+      await supabase.from('system_logs').insert([{
+        action_type: 'Payment Processed',
+        details: `Payroll ID #${id} marked as Paid.`
+      }]);
+
       fetchPayroll();
     } catch (err) {
       alert('Failed to update status');
@@ -48,7 +94,9 @@ const PayrollPage = () => {
           <p>Compute salaries, manage deductions, and track payments.</p>
         </div>
         <div className="flex gap-4">
-          <button className="btn btn-primary"><Play size={18} /> Run Payroll</button>
+          <button className="btn btn-primary" onClick={runPayroll} disabled={loading}>
+            {loading ? <Loader2 className="animate-spin" size={18} /> : <Play size={18} />} Run Payroll
+          </button>
         </div>
       </div>
 

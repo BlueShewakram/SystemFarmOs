@@ -9,7 +9,46 @@ const IrrigationPage = () => {
 
   useEffect(() => {
     fetchControls();
+    
+    
+    const interval = setInterval(() => {
+      const conditions = ['Sunny', 'Rainy', 'Cloudy'];
+      const randomCondition = conditions[Math.floor(Math.random() * conditions.length)];
+      autoUpdateWeather(randomCondition);
+    }, 15000); 
+
+    return () => clearInterval(interval);
   }, []);
+
+  const autoUpdateWeather = async (condition) => {
+    try {
+      const newStatus = condition === 'Rainy' ? 'Off' : 'On';
+      
+      
+      const { data } = await supabase.from('irrigation_control').select('weather_condition').limit(1);
+      if (data && data[0].weather_condition === condition) return;
+
+      const { error } = await supabase
+        .from('irrigation_control')
+        .update({ 
+          weather_condition: condition, 
+          irrigation_status: newStatus,
+          last_updated: new Date().toISOString() 
+        })
+        .neq('irrigation_id', 0);
+
+      if (!error) {
+        fetchControls();
+        
+        await supabase.from('system_logs').insert([{
+          action_type: 'Auto-Irrigation',
+          details: `Weather changed to ${condition}. System automatically turned ${newStatus}.`
+        }]);
+      }
+    } catch (err) {
+      console.error('Auto-update failed:', err);
+    }
+  };
 
   const fetchControls = async () => {
     try {
@@ -54,6 +93,32 @@ const IrrigationPage = () => {
     }
   };
 
+  const simulateWeather = async (condition) => {
+    try {
+      setLoading(true);
+      
+      const newStatus = condition === 'Rainy' ? 'Off' : 'On';
+      
+      const { error } = await supabase
+        .from('irrigation_control')
+        .update({ 
+          weather_condition: condition, 
+          irrigation_status: newStatus,
+          last_updated: new Date().toISOString() 
+        })
+        .neq('irrigation_id', 0); 
+
+      if (error) throw error;
+      
+      fetchControls();
+      alert(`Weather changed to ${condition}. System automatically turned ${newStatus}.`);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="irrigation-page fade-up">
       <div className="page-header">
@@ -61,7 +126,12 @@ const IrrigationPage = () => {
           <h2>Smart Irrigation Control</h2>
           <p>Monitor and manually override AI-driven irrigation zones.</p>
         </div>
-        <div className="flex gap-4">
+        <div className="flex gap-4 items-center">
+          <div className="flex bg-white/5 p-1 rounded-lg border border-white/10 mr-2">
+            <button className="px-3 py-1 text-xs hover:bg-white/10 rounded" onClick={() => simulateWeather('Sunny')}>Sunny</button>
+            <button className="px-3 py-1 text-xs hover:bg-white/10 rounded" onClick={() => simulateWeather('Rainy')}>Rainy</button>
+            <button className="px-3 py-1 text-xs hover:bg-white/10 rounded" onClick={() => simulateWeather('Cloudy')}>Cloudy</button>
+          </div>
           <button className="btn btn-outline" onClick={addSimulatedZone}>Add Zone</button>
           <button className="btn btn-primary" onClick={fetchControls}><RefreshCw size={18} /> Refresh</button>
         </div>

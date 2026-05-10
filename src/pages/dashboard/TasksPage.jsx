@@ -19,6 +19,9 @@ const TasksPage = () => {
     due_date: ''
   });
 
+  const [userRole, setUserRole] = useState('Manager');
+  const [currentWorkerId, setCurrentWorkerId] = useState(null);
+
   useEffect(() => {
     fetchData();
   }, []);
@@ -27,10 +30,22 @@ const TasksPage = () => {
     try {
       setLoading(true);
 
-      const { data: tasksData, error: tasksError } = await supabase
-        .from('tasks')
-        .select(`*, workers (first_name, last_name)`)
-        .order('task_id', { ascending: false });
+      
+      const { data: { user } } = await supabase.auth.getUser();
+      const { data: managerSelf } = await supabase.from('managers').select('manager_id').eq('email', user.email).single();
+      const { data: workerSelf } = await supabase.from('workers').select('user_id').eq('email', user.email).single();
+      
+      const isManager = !!managerSelf;
+      setUserRole(isManager ? 'Manager' : 'Worker');
+      setCurrentWorkerId(workerSelf?.user_id);
+
+      let tasksQuery = supabase.from('tasks').select(`*, workers (first_name, last_name)`);
+      
+      if (!isManager && workerSelf) {
+        tasksQuery = tasksQuery.eq('assigned_user', workerSelf.user_id);
+      }
+
+      const { data: tasksData, error: tasksError } = await tasksQuery.order('task_id', { ascending: false });
       if (tasksError) throw tasksError;
 
       const { data: workersData, error: workersError } = await supabase
@@ -74,6 +89,12 @@ const TasksPage = () => {
 
       if (error) throw error;
 
+      
+      await supabase.from('system_logs').insert([{
+        action_type: 'Task Assigned',
+        details: `Created task "${formData.task_name}" assigned to Worker ID: ${formData.assigned_user || 'None'}`
+      }]);
+
       setTasks([data[0], ...tasks]);
       setIsModalOpen(false);
       setFormData({ task_name: '', description: '', assigned_user: '', priority: 'Medium', status: 'Pending', due_date: '' });
@@ -84,16 +105,48 @@ const TasksPage = () => {
     }
   };
 
+  const smartAssign = () => {
+    if (!workers.length) return;
+    
+    
+    const candidates = workers.filter(w => 
+      !formData.description || 
+      w.skill_set?.toLowerCase().includes(formData.description.toLowerCase()) ||
+      formData.task_name.toLowerCase().includes(w.skill_set?.toLowerCase() || 'none')
+    );
+
+    const targetList = candidates.length > 0 ? candidates : workers;
+
+    
+    const workloadMap = {};
+    tasks.forEach(t => {
+      if (t.assigned_user && t.status !== 'Completed') {
+        workloadMap[t.assigned_user] = (workloadMap[t.assigned_user] || 0) + 1;
+      }
+    });
+
+    
+    const bestWorker = targetList.reduce((prev, curr) => {
+      const prevWorkload = workloadMap[prev.user_id] || 0;
+      const currWorkload = workloadMap[curr.user_id] || 0;
+      return currWorkload < prevWorkload ? curr : prev;
+    });
+
+    setFormData({ ...formData, assigned_user: bestWorker.user_id.toString() });
+  };
+
   return (
     <div className="tasks-page fade-up">
       <div className="page-header">
         <div className="page-title">
-          <h2>Task Assignment</h2>
-          <p>Create and assign tasks to your workforce.</p>
+          <h2>{userRole === 'Worker' ? 'My Assigned Tasks' : 'Task Assignment'}</h2>
+          <p>{userRole === 'Worker' ? 'View and track your daily work schedule.' : 'Create and assign tasks to your workforce.'}</p>
         </div>
-        <button className="btn btn-primary" onClick={() => setIsModalOpen(true)}>
-          <Plus size={18} /> Add Task
-        </button>
+        {userRole === 'Manager' && (
+          <button className="btn btn-primary" onClick={() => setIsModalOpen(true)}>
+            <Plus size={18} /> Add Task
+          </button>
+        )}
       </div>
 
       {loading ? (
@@ -159,11 +212,20 @@ const TasksPage = () => {
                     <input type="text" name="description" value={formData.description} onChange={handleInputChange} />
                   </div>
                   <div className="form-group">
-                    <label>Assign To (Worker)</label>
+                    <div className="flex justify-between items-center mb-1">
+                      <label>Assign To (Worker)</label>
+                      <button 
+                        type="button" 
+                        onClick={smartAssign}
+                        className="text-[10px] bg-accent/20 text-accent px-2 py-0.5 rounded hover:bg-accent/30 transition-colors"
+                      >
+                        Smart Auto-Assign
+                      </button>
+                    </div>
                     <select name="assigned_user" value={formData.assigned_user} onChange={handleInputChange}>
                       <option value="">-- Unassigned --</option>
                       {workers.map(w => (
-                        <option key={w.user_id} value={w.user_id}>{w.first_name} {w.last_name}</option>
+                        <option key={w.user_id} value={w.user_id}>{w.first_name} {w.last_name} ({w.skill_set || 'No Skill'})</option>
                       ))}
                     </select>
                   </div>
