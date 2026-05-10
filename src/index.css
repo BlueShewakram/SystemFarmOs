@@ -1,7 +1,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
 
 :root {
-  /* Core palette — rich dark with emerald accents */
+
   --bg-primary: #06080d;
   --bg-secondary: #0c0f16;
   --bg-elevated: #111520;
@@ -79,7 +79,6 @@ a {
 
 a:hover { color: var(--accent-light); }
 
-/* ─── Glassmorphism ─── */
 .glass {
   background: var(--bg-card);
   backdrop-filter: blur(24px) saturate(1.4);
@@ -97,7 +96,6 @@ a:hover { color: var(--accent-light); }
   border-radius: var(--radius-lg);
 }
 
-/* ─── Animations ─── */
 @keyframes float {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-12px); }
@@ -142,7 +140,6 @@ a:hover { color: var(--accent-light); }
   animation: fade-up 0.7s var(--transition-base) both;
 }
 
-/* ─── Buttons ─── */
 .btn {
   display: inline-flex;
   align-items: center;
@@ -212,7 +209,6 @@ a:hover { color: var(--accent-light); }
 .btn-lg { padding: 16px 32px; font-size: 1.05rem; border-radius: var(--radius-lg); }
 .btn-sm { padding: 8px 16px; font-size: 0.85rem; }
 
-/* ─── Form Elements ─── */
 input, select, textarea {
   width: 100%;
   padding: 12px 16px;
@@ -234,7 +230,6 @@ input:focus, select:focus, textarea:focus {
   background: rgba(0, 0, 0, 0.4);
 }
 
-/* ─── Layout Utilities ─── */
 .container {
   width: 100%;
   max-width: 1200px;
@@ -266,7 +261,6 @@ input:focus, select:focus, textarea:focus {
   color: var(--text-secondary);
 }
 
-/* ─── Text Utilities ─── */
 .text-gradient {
   background: linear-gradient(135deg, #fff 0%, #a0a0ab 100%);
   -webkit-background-clip: text;
@@ -288,7 +282,6 @@ input:focus, select:focus, textarea:focus {
   background-clip: text;
 }
 
-/* ─── Scrollbar ─── */
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: var(--bg-primary); }
 ::-webkit-scrollbar-thumb { background: var(--glass-border-light); border-radius: 3px; }

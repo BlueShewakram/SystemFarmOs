@@ -1,6 +1,3 @@
-/* ═══════════════════════════════════════════
-   AUTH PAGE
-   ═══════════════════════════════════════════ */
 .auth-page {
   min-height: 100vh;
   display: flex;
@@ -11,7 +8,6 @@
   padding: 24px;
 }
 
-/* ─── Ambient Background ─── */
 .auth-bg {
   position: absolute;
   inset: 0;
@@ -48,7 +44,6 @@
   background-size: 40px 40px;
 }
 
-/* ─── Auth Card ─── */
 .auth-card {
   position: relative;
   z-index: 10;
@@ -89,7 +84,6 @@
   color: var(--text-secondary);
 }
 
-/* ─── Form ─── */
 .auth-form {
   display: flex;
   flex-direction: column;
@@ -149,7 +143,6 @@
 
 .auth-eye-btn:hover { color: var(--text-primary); }
 
-/* ─── Extras ─── */
 .auth-extras {
   display: flex;
   justify-content: space-between;
@@ -186,7 +179,6 @@
   font-size: 1rem;
 }
 
-/* ─── Footer ─── */
 .auth-switch {
   text-align: center;
   margin-top: 32px;
@@ -209,7 +201,6 @@
   color: var(--accent-light);
 }
 
-/* ─── Error Message ─── */
 .auth-error-msg {
   display: flex;
   align-items: center;
@@ -252,7 +243,6 @@
   to { transform: rotate(360deg); }
 }
 
-/* ─── Responsive ─── */
 @media (max-width: 480px) {
   .auth-card { padding: 32px 24px; }
   .auth-top h2 { font-size: 1.6rem; }

@@ -14,7 +14,7 @@ const AuthPage = () => {
     password: '',
     fullname: ''
   });
-  
+
   const navigate = useNavigate();
 
   const handleInputChange = (e) => {
@@ -22,7 +22,7 @@ const AuthPage = () => {
       ...formData,
       [e.target.id]: e.target.value
     });
-    // Clear error when user starts typing
+
     if (error) setError(null);
   };
 
@@ -40,7 +40,7 @@ const AuthPage = () => {
         if (loginError) throw loginError;
         navigate('/dashboard');
       } else {
-        const { error: signUpError } = await supabase.auth.signUp({
+        const { data, error: signUpError } = await supabase.auth.signUp({
           email: formData.email,
           password: formData.password,
           options: {
@@ -50,9 +50,14 @@ const AuthPage = () => {
           },
         });
         if (signUpError) throw signUpError;
-        // Supabase usually requires email verification by default
-        setError('Signup successful! Please check your email for verification.');
-        setLoading(false);
+
+        if (data?.session) {
+          navigate('/dashboard');
+        } else {
+
+          setError('Signup successful! Please check your email for verification.');
+          setLoading(false);
+        }
       }
     } catch (err) {
       setError(err.message);
@@ -62,7 +67,7 @@ const AuthPage = () => {
 
   return (
     <div className="auth-page">
-      {/* Ambient orbs */}
+
       <div className="auth-bg">
         <div className="auth-orb auth-orb-1"></div>
         <div className="auth-orb auth-orb-2"></div>
@@ -70,15 +75,15 @@ const AuthPage = () => {
       </div>
 
       <div className="auth-card glass fade-up">
-        {/* Logo & heading */}
+
         <div className="auth-top">
           <div className="auth-logo-ring">
             <Tractor size={28} />
           </div>
           <h2>{isLogin ? 'Welcome Back' : 'Create Account'}</h2>
           <p>
-            {isLogin 
-              ? 'Sign in to manage your farm operations' 
+            {isLogin
+              ? 'Sign in to manage your farm operations'
               : 'Get started with FarmOS today'}
           </p>
         </div>
@@ -90,18 +95,17 @@ const AuthPage = () => {
           </div>
         )}
 
-        {/* Form */}
         <form onSubmit={handleSubmit} className="auth-form">
           {!isLogin && (
             <div className="auth-field">
               <label htmlFor="fullname">Full Name</label>
               <div className="auth-input-wrap">
                 <User size={18} className="auth-input-icon" />
-                <input 
-                  id="fullname" 
-                  type="text" 
-                  placeholder="Juan Dela Cruz" 
-                  required 
+                <input
+                  id="fullname"
+                  type="text"
+                  placeholder="Juan Dela Cruz"
+                  required
                   value={formData.fullname}
                   onChange={handleInputChange}
                 />
@@ -113,11 +117,11 @@ const AuthPage = () => {
             <label htmlFor="email">Email Address</label>
             <div className="auth-input-wrap">
               <Mail size={18} className="auth-input-icon" />
-              <input 
-                id="email" 
-                type="email" 
-                placeholder="you@farm.com" 
-                required 
+              <input
+                id="email"
+                type="email"
+                placeholder="you@farm.com"
+                required
                 value={formData.email}
                 onChange={handleInputChange}
               />
@@ -157,8 +161,8 @@ const AuthPage = () => {
             </div>
           )}
 
-          <button 
-            type="submit" 
+          <button
+            type="submit"
             className="btn btn-primary btn-lg auth-submit-btn"
             disabled={loading}
           >
@@ -173,7 +177,6 @@ const AuthPage = () => {
           </button>
         </form>
 
-        {/* Footer */}
         <div className="auth-switch">
           <span>
             {isLogin ? "Don't have an account?" : 'Already have an account?'}

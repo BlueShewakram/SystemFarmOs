@@ -1,18 +1,19 @@
 import React from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
-import { 
-  Activity, 
-  Users, 
-  CalendarCheck, 
-  Droplets, 
-  Wallet, 
-  ClipboardList, 
-  Settings, 
+import {
+  Activity,
+  Users,
+  CalendarCheck,
+  Droplets,
+  Wallet,
+  ClipboardList,
+  Settings,
   LogOut,
   Tractor
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
+import './DashboardLayout.css';
 
 const navItems = [
   { path: '/dashboard', icon: <Activity size={20} />, label: 'Overview', end: true },
@@ -32,10 +33,9 @@ const DashboardLayout = () => {
     navigate('/auth');
   };
 
-
   return (
     <div className="dashboard-layout">
-      {/* Sidebar */}
+
       <aside className="sidebar">
         <div className="sidebar-header">
           <div className="sidebar-logo">
@@ -48,8 +48,8 @@ const DashboardLayout = () => {
           <div className="nav-group-label">Main Menu</div>
           <nav>
             {navItems.map((item) => (
-              <NavLink 
-                key={item.path} 
+              <NavLink
+                key={item.path}
                 to={item.path}
                 end={item.end}
                 className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
@@ -73,7 +73,6 @@ const DashboardLayout = () => {
         </div>
       </aside>
 
-      {/* Main Content Area */}
       <main className="dashboard-main">
         <header className="dashboard-header">
           <div className="header-search">
