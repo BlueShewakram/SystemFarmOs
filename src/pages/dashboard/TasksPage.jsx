@@ -29,8 +29,6 @@ const TasksPage = () => {
   const fetchData = async () => {
     try {
       setLoading(true);
-
-      
       const { data: { user } } = await supabase.auth.getUser();
       const { data: managerSelf } = await supabase.from('managers').select('manager_id').eq('email', user.email).single();
       const { data: workerSelf } = await supabase.from('workers').select('user_id').eq('email', user.email).single();
@@ -89,10 +87,22 @@ const TasksPage = () => {
 
       if (error) throw error;
 
-      
+      // ✅ Log to system_logs
       await supabase.from('system_logs').insert([{
         action_type: 'Task Assigned',
         details: `Created task "${formData.task_name}" assigned to Worker ID: ${formData.assigned_user || 'None'}`
+      }]);
+
+      // ✅ Auto notification
+      const assignedWorker = workers.find(w => w.user_id === parseInt(formData.assigned_user));
+      const workerName = assignedWorker
+        ? `${assignedWorker.first_name} ${assignedWorker.last_name}`
+        : 'Unassigned';
+
+      await supabase.from('notifications').insert([{
+        message: `Task "${formData.task_name}" has been assigned to ${workerName}.`,
+        type: 'Task',
+        status: 'Pending'
       }]);
 
       setTasks([data[0], ...tasks]);
@@ -108,7 +118,6 @@ const TasksPage = () => {
   const smartAssign = () => {
     if (!workers.length) return;
     
-    
     const candidates = workers.filter(w => 
       !formData.description || 
       w.skill_set?.toLowerCase().includes(formData.description.toLowerCase()) ||
@@ -117,7 +126,6 @@ const TasksPage = () => {
 
     const targetList = candidates.length > 0 ? candidates : workers;
 
-    
     const workloadMap = {};
     tasks.forEach(t => {
       if (t.assigned_user && t.status !== 'Completed') {
@@ -125,7 +133,6 @@ const TasksPage = () => {
       }
     });
 
-    
     const bestWorker = targetList.reduce((prev, curr) => {
       const prevWorkload = workloadMap[prev.user_id] || 0;
       const currWorkload = workloadMap[curr.user_id] || 0;
@@ -167,7 +174,6 @@ const TasksPage = () => {
                   </div>
                   <span className={`priority-badge priority-${task.priority}`}>{task.priority}</span>
                 </div>
-
                 <div className="task-meta">
                   <div className="meta-row">
                     <span className="meta-label"><User size={14} /> Assigned to</span>
@@ -214,8 +220,8 @@ const TasksPage = () => {
                   <div className="form-group">
                     <div className="flex justify-between items-center mb-1">
                       <label>Assign To (Worker)</label>
-                      <button 
-                        type="button" 
+                      <button
+                        type="button"
                         onClick={smartAssign}
                         className="text-[10px] bg-accent/20 text-accent px-2 py-0.5 rounded hover:bg-accent/30 transition-colors"
                       >

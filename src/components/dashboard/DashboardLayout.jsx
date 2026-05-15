@@ -7,7 +7,6 @@ import {
   Droplets,
   Wallet,
   ClipboardList,
-  Settings,
   LogOut,
   Tractor,
   Bell,
@@ -30,13 +29,27 @@ const navItems = [
 const DashboardLayout = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const [role, setRole] = React.useState('Manager'); 
+  const [role, setRole] = React.useState('Manager');
   const [showNotifications, setShowNotifications] = React.useState(false);
   const [showProfileMenu, setShowProfileMenu] = React.useState(false);
-  const [notifications] = React.useState([
-    { id: 1, text: "System Health: All zones optimal", time: "Just now" },
-    { id: 2, text: "New Task Assigned to you", time: "5m ago" },
-  ]);
+
+  // ✅ UPDATED: Real notifications from Supabase
+  const [notifications, setNotifications] = React.useState([]);
+
+  // ✅ Fetch notifications on load
+  React.useEffect(() => {
+    fetchNotifications();
+  }, []);
+
+  const fetchNotifications = async () => {
+    const { data } = await supabase
+      .from('notifications')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(10);
+
+    setNotifications(data || []);
+  };
 
   React.useEffect(() => {
     if (user) {
@@ -45,7 +58,6 @@ const DashboardLayout = () => {
   }, [user]);
 
   const checkRole = async () => {
-    
     const { data: managerData } = await supabase
       .from('managers')
       .select('manager_id')
@@ -61,10 +73,9 @@ const DashboardLayout = () => {
 
   const filteredNavItems = navItems.filter(item => {
     if (role === 'Worker') {
-      
       return ['Overview', 'Tasks', 'Activity Logs'].includes(item.label);
     }
-    return true; 
+    return true;
   });
 
   const handleLogout = async () => {
@@ -111,22 +122,34 @@ const DashboardLayout = () => {
             <div className="notification-wrapper">
               <button className="icon-btn" onClick={() => setShowNotifications(!showNotifications)}>
                 <Bell size={20} />
-                {notifications.length > 0 && <span className="notification-badge">{notifications.length}</span>}
+                {/* ✅ Badge shows real count */}
+                {notifications.length > 0 && (
+                  <span className="notification-badge">{notifications.length}</span>
+                )}
               </button>
+
               {showNotifications && (
                 <div className="notification-dropdown glass">
                   <div className="dropdown-header">Notifications</div>
                   <div className="dropdown-body">
-                    {notifications.map(n => (
-                      <div key={n.id} className="notification-item">
-                        <p>{n.text}</p>
-                        <span>{n.time}</span>
+                    {/* ✅ Shows real notifications or empty message */}
+                    {notifications.length === 0 ? (
+                      <div className="notification-item">
+                        <p>No notifications yet.</p>
                       </div>
-                    ))}
+                    ) : (
+                      notifications.map(n => (
+                        <div key={n.id} className="notification-item">
+                          <p>{n.message}</p>
+                          <span>{new Date(n.created_at).toLocaleTimeString()}</span>
+                        </div>
+                      ))
+                    )}
                   </div>
                 </div>
               )}
             </div>
+
             <div className="header-user-wrapper" style={{ position: 'relative' }}>
               <div className="header-user" onClick={() => setShowProfileMenu(!showProfileMenu)}>
                 <div className="user-info">
@@ -134,9 +157,19 @@ const DashboardLayout = () => {
                   <span className="user-role">{role}</span>
                 </div>
                 <div className="user-avatar">
-                  <img src={`https://ui-avatars.com/api/?name=${user?.user_metadata?.full_name || user?.email}&background=10b981&color=fff`} alt="User Avatar" />
+                  <img
+                    src={`https://ui-avatars.com/api/?name=${user?.user_metadata?.full_name || user?.email}&background=10b981&color=fff`}
+                    alt="User Avatar"
+                  />
                 </div>
-                <ChevronDown size={14} className="text-muted" style={{ transform: showProfileMenu ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }} />
+                <ChevronDown
+                  size={14}
+                  className="text-muted"
+                  style={{
+                    transform: showProfileMenu ? 'rotate(180deg)' : 'rotate(0deg)',
+                    transition: 'transform 0.2s'
+                  }}
+                />
               </div>
 
               {showProfileMenu && (
@@ -159,4 +192,4 @@ const DashboardLayout = () => {
   );
 };
 
-export default DashboardLayout;
+export default DashboardLayout; 
