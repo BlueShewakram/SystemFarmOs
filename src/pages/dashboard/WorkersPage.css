@@ -8,6 +8,8 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
 }
 
 .page-title h2 {
@@ -21,11 +23,13 @@
   font-size: 0.95rem;
 }
 
+/* Table Container */
 .table-container {
   background: rgba(15, 23, 42, 0.4);
   border: 1px solid var(--glass-border);
   border-radius: 16px;
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: visible;
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
 }
@@ -34,6 +38,7 @@
   width: 100%;
   border-collapse: collapse;
   text-align: left;
+  min-width: 600px;
 }
 
 .data-table th,
@@ -49,6 +54,7 @@
   text-transform: uppercase;
   letter-spacing: 0.5px;
   background: rgba(0, 0, 0, 0.2);
+  white-space: nowrap;
 }
 
 .data-table tbody tr {
@@ -59,10 +65,12 @@
   background: rgba(255, 255, 255, 0.03);
 }
 
+/* Worker Cell */
 .worker-cell {
   display: flex;
   align-items: center;
   gap: 12px;
+  min-width: 150px;
 }
 
 .worker-avatar {
@@ -77,6 +85,12 @@
   background: var(--primary);
   color: var(--accent);
   border: 1px solid rgba(16, 185, 129, 0.3);
+  flex-shrink: 0;
+}
+
+.worker-info {
+  display: flex;
+  flex-direction: column;
 }
 
 .worker-name {
@@ -89,6 +103,7 @@
   color: var(--text-muted);
 }
 
+/* Status Badge */
 .status-badge {
   display: inline-flex;
   align-items: center;
@@ -97,6 +112,7 @@
   border-radius: 20px;
   font-size: 0.75rem;
   font-weight: 600;
+  white-space: nowrap;
 }
 
 .status-active {
@@ -118,6 +134,7 @@
   background: currentColor;
 }
 
+/* Modal */
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -136,6 +153,8 @@
   border-radius: 20px;
   width: 100%;
   max-width: 500px;
+  max-height: 90vh;
+  overflow-y: auto;
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
 }
 
@@ -145,6 +164,8 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
 }
 
 .modal-header h3 {
@@ -160,6 +181,8 @@
   padding: 4px;
   border-radius: 8px;
   display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .close-btn:hover {
@@ -194,7 +217,8 @@
   font-weight: 500;
 }
 
-.form-group input, .form-group select {
+.form-group input, 
+.form-group select {
   background: rgba(0, 0, 0, 0.3);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 8px;
@@ -204,7 +228,8 @@
   transition: all 0.2s;
 }
 
-.form-group input:focus, .form-group select:focus {
+.form-group input:focus, 
+.form-group select:focus {
   outline: none;
   border-color: var(--accent);
   box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
@@ -216,4 +241,289 @@
   display: flex;
   justify-content: flex-end;
   gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* ============================================ */
+/* RESPONSIVE STYLES - Workers Page */
+/* ============================================ */
+
+/* Tablet (up to 1024px) */
+@media (max-width: 1024px) {
+  .workers-page {
+    gap: 20px;
+  }
+  
+  .page-title h2 {
+    font-size: 1.6rem;
+  }
+  
+  .data-table th,
+  .data-table td {
+    padding: 14px 16px;
+  }
+}
+
+/* Tablet Portrait (up to 768px) */
+@media (max-width: 768px) {
+  .workers-page {
+    gap: 16px;
+  }
+  
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .page-title h2 {
+    font-size: 1.4rem;
+  }
+  
+  .page-title p {
+    font-size: 0.85rem;
+  }
+  
+  .table-container {
+    border-radius: 14px;
+  }
+  
+  .data-table th,
+  .data-table td {
+    padding: 12px 14px;
+  }
+  
+  .data-table th {
+    font-size: 0.75rem;
+  }
+  
+  .worker-cell {
+    gap: 10px;
+    min-width: 130px;
+  }
+  
+  .worker-avatar {
+    width: 32px;
+    height: 32px;
+    font-size: 0.8rem;
+  }
+  
+  .worker-name {
+    font-size: 0.9rem;
+  }
+  
+  .worker-email {
+    font-size: 0.7rem;
+  }
+  
+  .status-badge {
+    padding: 3px 8px;
+    font-size: 0.7rem;
+  }
+}
+
+/* Mobile (up to 480px) */
+@media (max-width: 480px) {
+  .workers-page {
+    gap: 14px;
+  }
+  
+  .page-title h2 {
+    font-size: 1.3rem;
+  }
+  
+  .page-title p {
+    font-size: 0.8rem;
+  }
+  
+  .table-container {
+    border-radius: 12px;
+  }
+  
+  /* Make table horizontally scrollable on mobile */
+  .table-container {
+    overflow-x: auto;
+  }
+  
+  .data-table {
+    min-width: 550px;
+  }
+  
+  .data-table th,
+  .data-table td {
+    padding: 10px 12px;
+  }
+  
+  /* Modal responsive */
+  .modal-content {
+    max-width: 95%;
+    margin: 0 auto;
+  }
+  
+  .modal-header {
+    padding: 16px 20px;
+  }
+  
+  .modal-header h3 {
+    font-size: 1.1rem;
+  }
+  
+  .modal-body {
+    padding: 20px;
+  }
+  
+  .form-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  
+  .form-group {
+    margin-bottom: 12px;
+  }
+  
+  .form-group label {
+    font-size: 0.8rem;
+  }
+  
+  .form-group input,
+  .form-group select {
+    padding: 8px 12px;
+    font-size: 0.9rem;
+  }
+  
+  .modal-footer {
+    padding: 14px 20px;
+    gap: 10px;
+  }
+  
+  .modal-footer button {
+    flex: 1;
+  }
+}
+
+/* Small Mobile (up to 380px) */
+@media (max-width: 380px) {
+  .workers-page {
+    gap: 12px;
+  }
+  
+  .page-title h2 {
+    font-size: 1.2rem;
+  }
+  
+  .page-title p {
+    font-size: 0.75rem;
+  }
+  
+  .data-table {
+    min-width: 500px;
+  }
+  
+  .data-table th,
+  .data-table td {
+    padding: 8px 10px;
+    font-size: 0.75rem;
+  }
+  
+  .worker-cell {
+    gap: 8px;
+    min-width: 120px;
+  }
+  
+  .worker-avatar {
+    width: 28px;
+    height: 28px;
+    font-size: 0.7rem;
+  }
+  
+  .worker-name {
+    font-size: 0.8rem;
+  }
+  
+  .worker-email {
+    font-size: 0.65rem;
+  }
+  
+  .status-badge {
+    padding: 2px 6px;
+    font-size: 0.65rem;
+  }
+  
+  .modal-content {
+    max-width: 98%;
+  }
+  
+  .modal-header {
+    padding: 14px 16px;
+  }
+  
+  .modal-body {
+    padding: 16px;
+  }
+  
+  .modal-footer {
+    padding: 12px 16px;
+  }
+}
+
+/* Touch device optimizations */
+@media (hover: none) {
+  .data-table tbody tr:hover {
+    background: transparent;
+  }
+  
+  .data-table tbody tr:active {
+    background: rgba(255, 255, 255, 0.03);
+  }
+  
+  .close-btn:active {
+    background: rgba(255, 255, 255, 0.1);
+  }
+}
+
+/* Add Worker Button (if you have one) */
+.add-worker-btn {
+  padding: 10px 20px;
+  background: var(--accent);
+  border: none;
+  border-radius: 8px;
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.add-worker-btn:hover {
+  background: var(--accent-dark);
+  transform: translateY(-1px);
+}
+
+@media (max-width: 768px) {
+  .add-worker-btn {
+    padding: 8px 16px;
+    font-size: 0.85rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .add-worker-btn {
+    width: 100%;
+    white-space: normal;
+  }
+}
+
+/* Loading and Empty States */
+.workers-loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 300px;
+}
+
+.workers-empty {
+  text-align: center;
+  padding: 48px 20px;
+  color: var(--text-muted);
+  background: rgba(15, 23, 42, 0.4);
+  border-radius: 16px;
 }
