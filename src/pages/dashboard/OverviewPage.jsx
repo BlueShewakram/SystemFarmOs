@@ -3,6 +3,7 @@ import { Users, CalendarCheck, Droplets, Zap, TrendingUp, AlertTriangle } from '
 import { supabase } from '../../lib/supabase';
 import './OverviewPage.css';
 
+
 const OverviewPage = () => {
   const [stats, setStats] = useState({
     workers: 0,

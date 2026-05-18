@@ -12,7 +12,8 @@ import {
   Tractor,
   Bell,
   Search,
-  ChevronDown
+  ChevronDown,
+  Camera  // Added Camera icon
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
@@ -33,6 +34,9 @@ const DashboardLayout = () => {
   const [role, setRole] = React.useState('Manager'); 
   const [showNotifications, setShowNotifications] = React.useState(false);
   const [showProfileMenu, setShowProfileMenu] = React.useState(false);
+  const [uploading, setUploading] = React.useState(false);
+  const [profile, setProfile] = React.useState(null);
+  const fileInputRef = React.useRef(null);
   const [notifications] = React.useState([
     { id: 1, text: "System Health: All zones optimal", time: "Just now" },
     { id: 2, text: "New Task Assigned to you", time: "5m ago" },
@@ -41,11 +45,11 @@ const DashboardLayout = () => {
   React.useEffect(() => {
     if (user) {
       checkRole();
+      fetchProfile();
     }
   }, [user]);
 
   const checkRole = async () => {
-    
     const { data: managerData } = await supabase
       .from('managers')
       .select('manager_id')
@@ -59,18 +63,89 @@ const DashboardLayout = () => {
     }
   };
 
-  const filteredNavItems = navItems.filter(item => {
-    if (role === 'Worker') {
-      
-      return ['Overview', 'Tasks', 'Activity Logs'].includes(item.label);
+  const fetchProfile = async () => {
+    const { data } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', user?.id)
+      .single();
+    setProfile(data);
+  };
+
+  const handlePhotoUpload = async (event) => {
+  try {
+    setUploading(true);
+    const file = event.target.files[0];
+    if (!file) return;
+
+    // First, check if profile exists, create if it doesn't
+    const { data: existingProfile } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('id', user.id)
+      .single();
+
+    if (!existingProfile) {
+      // Create profile if it doesn't exist
+      await supabase
+        .from('profiles')
+        .insert([{ 
+          id: user.id, 
+          full_name: user.user_metadata?.full_name || user.email,
+          role: 'Worker'
+        }]);
     }
-    return true; 
-  });
+
+    // Upload photo to storage
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${user.id}/profile-${Date.now()}.${fileExt}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('images')
+      .upload(fileName, file);
+
+    if (uploadError) throw uploadError;
+
+    // Get public URL
+    const { data: { publicUrl } } = supabase.storage
+      .from('images')
+      .getPublicUrl(fileName);
+
+    // Update profile with avatar URL
+    const { error: updateError } = await supabase
+      .from('profiles')
+      .update({ 
+        avatar_url: publicUrl,
+        updated_at: new Date()
+      })
+      .eq('id', user.id);
+
+    if (updateError) throw updateError;
+
+    // Update local state
+    setProfile({ ...profile, avatar_url: publicUrl });
+    alert('Profile photo uploaded and saved!');
+    
+  } catch (error) {
+    console.error('Upload error:', error);
+    alert('Error: ' + error.message);
+  } finally {
+    setUploading(false);
+    setShowProfileMenu(false);
+  }
+};
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
     navigate('/auth');
   };
+
+  const filteredNavItems = navItems.filter(item => {
+    if (role === 'Worker') {
+      return ['Overview', 'Tasks', 'Activity Logs'].includes(item.label);
+    }
+    return true; 
+  });
 
   return (
     <div className="dashboard-layout">
@@ -134,19 +209,76 @@ const DashboardLayout = () => {
                   <span className="user-role">{role}</span>
                 </div>
                 <div className="user-avatar">
-                  <img src={`https://ui-avatars.com/api/?name=${user?.user_metadata?.full_name || user?.email}&background=10b981&color=fff`} alt="User Avatar" />
+                  {profile?.avatar_url ? (
+                    <img src={profile.avatar_url} alt="User Avatar" style={{ objectFit: 'cover' }} />
+                  ) : (
+                    <img src={`https://ui-avatars.com/api/?name=${user?.user_metadata?.full_name || user?.email}&background=10b981&color=fff`} alt="User Avatar" />
+                  )}
                 </div>
                 <ChevronDown size={14} className="text-muted" style={{ transform: showProfileMenu ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }} />
               </div>
 
-              {showProfileMenu && (
-                <div className="profile-dropdown glass">
-                  <div className="dropdown-item text-red" onClick={handleLogout}>
-                    <LogOut size={16} />
-                    <span>Sign Out</span>
-                  </div>
-                </div>
-              )}
+             {showProfileMenu && (
+  <div style={{
+    position: 'absolute',
+    top: '100%',
+    right: 0,
+    marginTop: '8px',
+    background: '#1a1a2e',
+    border: '1px solid #333',
+    borderRadius: '8px',
+    minWidth: '220px',
+    zIndex: 1000,
+    padding: '8px'
+  }}>
+    {/* Upload Photo Option */}
+    <div 
+      onClick={() => fileInputRef.current?.click()}
+      style={{
+        padding: '10px 12px',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '12px',
+        cursor: 'pointer',
+        color: 'white',
+        borderRadius: '4px'
+      }}
+      onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
+      onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+    >
+      <Camera size={16} />
+      <span>{uploading ? 'Uploading...' : 'Upload Profile Photo'}</span>
+    </div>
+    
+    <input
+      ref={fileInputRef}
+      type="file"
+      accept="image/jpeg,image/png,image/webp"
+      onChange={handlePhotoUpload}
+      style={{ display: 'none' }}
+    />
+    
+    <div style={{ height: '1px', background: 'rgba(255,255,255,0.1)', margin: '4px 0' }}></div>
+    
+    <div 
+      onClick={handleLogout}
+      style={{
+        padding: '10px 12px',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '12px',
+        cursor: 'pointer',
+        color: '#ff6b6b',
+        borderRadius: '4px'
+      }}
+      onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,107,107,0.1)'}
+      onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+    >
+      <LogOut size={16} />
+      <span>Sign Out</span>
+    </div>
+  </div>
+)}
             </div>
           </div>
         </header>
