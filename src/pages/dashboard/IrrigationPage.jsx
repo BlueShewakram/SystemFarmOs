@@ -10,12 +10,11 @@ const IrrigationPage = () => {
   useEffect(() => {
     fetchControls();
     
-    
     const interval = setInterval(() => {
       const conditions = ['Sunny', 'Rainy', 'Cloudy'];
       const randomCondition = conditions[Math.floor(Math.random() * conditions.length)];
       autoUpdateWeather(randomCondition);
-    }, 15000); 
+    }, 15000);
 
     return () => clearInterval(interval);
   }, []);
@@ -23,7 +22,6 @@ const IrrigationPage = () => {
   const autoUpdateWeather = async (condition) => {
     try {
       const newStatus = condition === 'Rainy' ? 'Off' : 'On';
-      
       
       const { data } = await supabase.from('irrigation_control').select('weather_condition').limit(1);
       if (data && data[0].weather_condition === condition) return;
@@ -43,6 +41,13 @@ const IrrigationPage = () => {
         await supabase.from('system_logs').insert([{
           action_type: 'Auto-Irrigation',
           details: `Weather changed to ${condition}. System automatically turned ${newStatus}.`
+        }]);
+
+        // ✅ Auto notification
+        await supabase.from('notifications').insert([{
+          message: `Weather changed to ${condition}. Irrigation automatically turned ${newStatus}.`,
+          type: 'Irrigation',
+          status: 'Pending'
         }]);
       }
     } catch (err) {
@@ -76,6 +81,13 @@ const IrrigationPage = () => {
       if (error) throw error;
       fetchControls();
 
+      // ✅ Auto notification
+      await supabase.from('notifications').insert([{
+        message: `Irrigation Zone #${id} has been turned ${newStatus} manually.`,
+        type: 'Irrigation',
+        status: 'Pending'
+      }]);
+
     } catch (err) {
       alert('Failed to update status');
     }
@@ -96,7 +108,6 @@ const IrrigationPage = () => {
   const simulateWeather = async (condition) => {
     try {
       setLoading(true);
-      
       const newStatus = condition === 'Rainy' ? 'Off' : 'On';
       
       const { error } = await supabase
@@ -106,11 +117,18 @@ const IrrigationPage = () => {
           irrigation_status: newStatus,
           last_updated: new Date().toISOString() 
         })
-        .neq('irrigation_id', 0); 
+        .neq('irrigation_id', 0);
 
       if (error) throw error;
-      
       fetchControls();
+
+      // ✅ Auto notification
+      await supabase.from('notifications').insert([{
+        message: `Weather simulated to ${condition}. Irrigation automatically turned ${newStatus}.`,
+        type: 'Irrigation',
+        status: 'Pending'
+      }]);
+
       alert(`Weather changed to ${condition}. System automatically turned ${newStatus}.`);
     } catch (err) {
       console.error(err);
