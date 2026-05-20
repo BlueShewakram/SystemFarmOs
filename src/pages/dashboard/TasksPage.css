@@ -100,3 +100,23 @@
 .status-Pending { color: #f59e0b; }
 .status-In-Progress { color: #3b82f6; }
 .status-Completed { color: #10b981; }
+
+/* ✅ Modal Fix */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  overflow-y: auto;
+  padding: 20px;
+}
+
+.modal-content {
+  max-height: 90vh;
+  overflow-y: auto;
+  width: 100%;
+  max-width: 580px;
+}
