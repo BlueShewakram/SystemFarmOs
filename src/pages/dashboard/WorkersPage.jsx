@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, MoreVertical, X, Loader2 } from 'lucide-react';
+import { Plus, MoreVertical, X, Loader2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import './WorkersPage.css';
 
@@ -31,7 +31,6 @@ const WorkersPage = () => {
         .from('workers')
         .select('*')
         .order('user_id', { ascending: false });
-
       if (error) throw error;
       setWorkers(data || []);
     } catch (err) {
@@ -42,10 +41,7 @@ const WorkersPage = () => {
   };
 
   const handleInputChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value
-    });
+    setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
   const handleAddWorker = async (e) => {
@@ -68,15 +64,21 @@ const WorkersPage = () => {
 
       if (error) throw error;
 
-      
+      // ✅ Log to system_logs
       await supabase.from('system_logs').insert([{
         action_type: 'Worker Added',
         details: `Added new worker: ${formData.first_name} ${formData.last_name} (${formData.skill_set})`
       }]);
 
+      // ✅ Auto notification
+      await supabase.from('notifications').insert([{
+        message: `New worker "${formData.first_name} ${formData.last_name}" has been added to the system.`,
+        type: 'System',
+        status: 'Pending'
+      }]);
+
       setWorkers([data[0], ...workers]);
       setIsModalOpen(false);
-
       setFormData({
         first_name: '', last_name: '', email: '', skill_set: '',
         availability: 'Full-time', hourly_rate: 0, daily_rate: 0, status: 'Active'
@@ -97,8 +99,7 @@ const WorkersPage = () => {
           <p>Manage your farm staff, assign roles, and track availability.</p>
         </div>
         <button className="btn btn-primary" onClick={() => setIsModalOpen(true)}>
-          <Plus size={18} />
-          Add Worker
+          <Plus size={18} /> Add Worker
         </button>
       </div>
 
@@ -167,9 +168,7 @@ const WorkersPage = () => {
           <div className="modal-content fade-up">
             <div className="modal-header">
               <h3>Add New Worker</h3>
-              <button className="close-btn" onClick={() => setIsModalOpen(false)}>
-                <X size={20} />
-              </button>
+              <button className="close-btn" onClick={() => setIsModalOpen(false)}><X size={20} /></button>
             </div>
             <form onSubmit={handleAddWorker}>
               <div className="modal-body">
