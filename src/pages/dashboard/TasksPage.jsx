@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Plus, Calendar, User, Clock, Loader2, X } from 'lucide-react';
+import { useOutletContext } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import './TasksPage.css';
 
 const TasksPage = () => {
+  const { searchQuery } = useOutletContext() || { searchQuery: '' };
   const [tasks, setTasks] = useState([]);
   const [workers, setWorkers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -72,6 +74,40 @@ const TasksPage = () => {
     const timer = window.setTimeout(fetchData, 0);
     return () => window.clearTimeout(timer);
   }, [fetchData]);
+
+  const queryTokens = useMemo(() => {
+    if (!searchQuery) return [];
+    return searchQuery.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  }, [searchQuery]);
+
+  const filteredTasks = useMemo(() => {
+    if (queryTokens.length === 0) return tasks;
+
+    return tasks.filter((task) => {
+      const workerName = task.workers
+        ? `${task.workers.first_name} ${task.workers.last_name}`
+        : 'Unassigned';
+      const dueDateLabel = task.due_date ? new Date(task.due_date).toLocaleDateString() : '';
+
+      const searchText = [
+        task.task_name,
+        task.description,
+        task.priority,
+        task.status,
+        workerName,
+        dueDateLabel
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+
+      return queryTokens.every((token) => searchText.includes(token));
+    });
+  }, [tasks, queryTokens]);
+
+  const trimmedQuery = searchQuery?.trim();
+  const showNoTasks = !loading && tasks.length === 0;
+  const showNoMatches = !loading && tasks.length > 0 && filteredTasks.length === 0 && queryTokens.length > 0;
 
   const handleInputChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -154,7 +190,7 @@ const TasksPage = () => {
   };
 
   return (
-    <div className="tasks-page fade-up">
+    <div className="tasks-page">
       <div className="page-header">
         <div className="page-title">
           <h2>{userRole === 'Worker' ? 'My Assigned Tasks' : 'Task Assignment'}</h2>
@@ -171,12 +207,12 @@ const TasksPage = () => {
         <div className="flex justify-center p-12"><Loader2 className="animate-spin text-accent w-8 h-8" /></div>
       ) : (
         <div className="tasks-grid">
-          {tasks.length === 0 ? (
+          {filteredTasks.length === 0 ? (
             <div className="col-span-full text-center p-12 text-secondary bg-[rgba(15,23,42,0.4)] rounded-2xl border border-white/5">
-              No tasks found. Click "Add Task" to assign work.
+              {showNoTasks ? 'No tasks found. Click "Add Task" to assign work.' : `No results for "${trimmedQuery}".`}
             </div>
           ) : (
-            tasks.map(task => (
+            filteredTasks.map(task => (
               <div key={task.task_id} className="task-card">
                 <div className="task-header">
                   <div>
@@ -229,12 +265,12 @@ const TasksPage = () => {
                     <input type="text" name="description" value={formData.description} onChange={handleInputChange} />
                   </div>
                   <div className="form-group">
-                    <div className="flex justify-between items-center mb-1">
+                    <div className="form-label-row">
                       <label>Assign To (Worker)</label>
                       <button
                         type="button"
                         onClick={smartAssign}
-                        className="text-[10px] bg-accent/20 text-accent px-2 py-0.5 rounded hover:bg-accent/30 transition-colors"
+                        className="smart-assign-btn"
                       >
                         Smart Auto-Assign
                       </button>

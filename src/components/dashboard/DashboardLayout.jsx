@@ -36,6 +36,7 @@ const DashboardLayout = () => {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [notifications, setNotifications] = useState([]);
+  const [searchQuery, setSearchQuery] = useState('');
   const fileInputRef = useRef(null);
 
   const displayName =
@@ -208,7 +209,13 @@ const DashboardLayout = () => {
         <header className="dashboard-header">
           <div className="header-search">
             <Search size={18} className="search-icon" />
-            <input type="text" placeholder="Search workers, tasks..." className="search-input" />
+            <input
+              type="text"
+              placeholder="Search workers, tasks..."
+              className="search-input"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+            />
           </div>
           <div className="header-actions">
             <div className="notification-wrapper">
@@ -339,7 +346,7 @@ const DashboardLayout = () => {
         </header>
 
         <div className="dashboard-content">
-          <Outlet />
+          <Outlet context={{ searchQuery }} />
         </div>
       </main>
     </div>

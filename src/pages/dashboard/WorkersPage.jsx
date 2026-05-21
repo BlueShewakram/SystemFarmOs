@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Plus, MoreVertical, X, Loader2 } from 'lucide-react';
+import { useOutletContext } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import './WorkersPage.css';
 
 const WorkersPage = () => {
+  const { searchQuery } = useOutletContext() || { searchQuery: '' };
   const [workers, setWorkers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -40,6 +42,35 @@ const WorkersPage = () => {
     const timer = window.setTimeout(fetchWorkers, 0);
     return () => window.clearTimeout(timer);
   }, [fetchWorkers]);
+
+  const queryTokens = useMemo(() => {
+    if (!searchQuery) return [];
+    return searchQuery.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  }, [searchQuery]);
+
+  const filteredWorkers = useMemo(() => {
+    if (queryTokens.length === 0) return workers;
+
+    return workers.filter((worker) => {
+      const searchText = [
+        worker.first_name,
+        worker.last_name,
+        worker.email,
+        worker.skill_set,
+        worker.availability,
+        worker.status
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+
+      return queryTokens.every((token) => searchText.includes(token));
+    });
+  }, [workers, queryTokens]);
+
+  const trimmedQuery = searchQuery?.trim();
+  const showNoWorkers = !loading && workers.length === 0;
+  const showNoMatches = !loading && workers.length > 0 && filteredWorkers.length === 0;
 
   const handleInputChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -120,14 +151,20 @@ const WorkersPage = () => {
               </tr>
             </thead>
             <tbody>
-              {workers.length === 0 ? (
+              {showNoWorkers ? (
                 <tr>
                   <td colSpan="6" className="text-center py-12 text-secondary">
                     No workers found. Click "Add Worker" to get started.
                   </td>
                 </tr>
+              ) : showNoMatches ? (
+                <tr>
+                  <td colSpan="6" className="text-center py-12 text-secondary">
+                    No results for "{trimmedQuery}".
+                  </td>
+                </tr>
               ) : (
-                workers.map(worker => (
+                filteredWorkers.map(worker => (
                   <tr key={worker.user_id}>
                     <td>
                       <div className="worker-cell">
