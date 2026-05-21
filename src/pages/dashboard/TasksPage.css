@@ -2,6 +2,15 @@
   display: flex;
   flex-direction: column;
   gap: 24px;
+  padding: 32px;
+  min-height: 100%;
+  background-color: transparent;
+  background-image:
+    linear-gradient(180deg, rgba(6, 8, 13, 0.5) 0%, rgba(6, 8, 13, 0.5) 100%),
+    url('../../assets/taskbg.jpg');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
 }
 
 .tasks-grid {
@@ -237,7 +246,17 @@
   flex-wrap: wrap;
 }
 
+@media (max-width: 1200px) {
+  .tasks-page {
+    padding: 24px;
+  }
+}
+
 @media (max-width: 1024px) {
+  .tasks-page {
+    padding: 20px;
+  }
+
   .tasks-page .modal-content {
     max-width: 95%;
     margin: 0 auto;
@@ -284,7 +303,23 @@
   }
 }
 
+@media (max-width: 768px) {
+  .tasks-page {
+    padding: 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .tasks-page {
+    padding: 12px;
+  }
+}
+
 @media (max-width: 380px) {
+  .tasks-page {
+    padding: 10px;
+  }
+
   .tasks-page .modal-content {
     max-width: 98%;
   }
