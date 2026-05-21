@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Tractor, ArrowRight, User, Lock, Mail, Eye, EyeOff, Loader2, AlertCircle } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
@@ -61,6 +61,31 @@ const AuthPage = () => {
       }
     } catch (err) {
       setError(err.message);
+      setLoading(false);
+    }
+  };
+
+  const handlePasswordReset = async (e) => {
+    e.preventDefault();
+    setError(null);
+
+    if (!formData.email) {
+      setError('Enter your email address first so we can send a reset link.');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(formData.email, {
+        redirectTo: `${window.location.origin}/auth`,
+      });
+
+      if (resetError) throw resetError;
+      setError('Password reset link sent. Please check your email.');
+    } catch (err) {
+      setError(err.message);
+    } finally {
       setLoading(false);
     }
   };
@@ -135,7 +160,7 @@ const AuthPage = () => {
               <input
                 id="password"
                 type={showPassword ? 'text' : 'password'}
-                placeholder="••••••••"
+                placeholder="Password"
                 required
                 value={formData.password}
                 onChange={handleInputChange}
@@ -157,7 +182,7 @@ const AuthPage = () => {
                 <input type="checkbox" />
                 <span>Remember me</span>
               </label>
-              <a href="#" className="auth-forgot">Forgot password?</a>
+              <a href="#reset-password" className="auth-forgot" onClick={handlePasswordReset}>Forgot password?</a>
             </div>
           )}
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Users, CalendarCheck, Droplets, Zap, TrendingUp, AlertTriangle } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import './OverviewPage.css';
@@ -14,11 +14,7 @@ const OverviewPage = () => {
   const [recentLogs, setRecentLogs] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchStats();
-  }, []);
-
-  const fetchStats = async () => {
+  const fetchStats = useCallback(async () => {
     try {
       setLoading(true);
       const { count: workerCount } = await supabase.from('workers').select('*', { count: 'exact', head: true });
@@ -40,13 +36,18 @@ const OverviewPage = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setTimeout(fetchStats, 0);
+    return () => window.clearTimeout(timer);
+  }, [fetchStats]);
 
   const cards = [
-    { label: 'Total Workers', value: stats.workers, icon: <Users />, color: 'text-accent', bg: 'bg-accent/10' },
-    { label: 'Pending Tasks', value: stats.tasks, icon: <CalendarCheck />, color: 'text-blue-400', bg: 'bg-blue-400/10' },
-    { label: 'Active Zones', value: stats.activeIrrigation, icon: <Droplets />, color: 'text-cyan-400', bg: 'bg-cyan-400/10' },
-    { label: 'System Health', value: stats.health, icon: <Zap />, color: 'text-emerald-400', bg: 'bg-emerald-400/10' },
+    { label: 'Total Workers', value: loading ? '...' : stats.workers, icon: <Users />, color: 'text-accent', bg: 'bg-accent/10' },
+    { label: 'Pending Tasks', value: loading ? '...' : stats.tasks, icon: <CalendarCheck />, color: 'text-blue-400', bg: 'bg-blue-400/10' },
+    { label: 'Active Zones', value: loading ? '...' : stats.activeIrrigation, icon: <Droplets />, color: 'text-cyan-400', bg: 'bg-cyan-400/10' },
+    { label: 'System Health', value: loading ? '...' : stats.health, icon: <Zap />, color: 'text-emerald-400', bg: 'bg-emerald-400/10' },
   ];
 
   return (

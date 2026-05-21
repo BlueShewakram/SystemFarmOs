@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Activity, Clock, Loader2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import './LogsPage.css';
@@ -7,11 +7,7 @@ const LogsPage = () => {
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchLogs();
-  }, []);
-
-  const fetchLogs = async () => {
+  const fetchLogs = useCallback(async () => {
     try {
       setLoading(true);
       const { data, error } = await supabase
@@ -25,7 +21,12 @@ const LogsPage = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setTimeout(fetchLogs, 0);
+    return () => window.clearTimeout(timer);
+  }, [fetchLogs]);
 
   return (
     <div className="logs-page fade-up">

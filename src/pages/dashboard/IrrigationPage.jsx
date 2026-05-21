@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Droplets, CloudRain, Sun, Loader2, RefreshCw } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import './IrrigationPage.css';
@@ -7,24 +7,32 @@ const IrrigationPage = () => {
   const [controls, setControls] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchControls();
-    
-    const interval = setInterval(() => {
-      const conditions = ['Sunny', 'Rainy', 'Cloudy'];
-      const randomCondition = conditions[Math.floor(Math.random() * conditions.length)];
-      autoUpdateWeather(randomCondition);
-    }, 15000);
-
-    return () => clearInterval(interval);
+  const fetchControls = useCallback(async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('irrigation_control')
+        .select('*')
+        .order('last_updated', { ascending: false });
+      if (error) throw error;
+      setControls(data || []);
+    } catch (err) {
+      console.error('Failed to fetch irrigation controls:', err.message);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  const autoUpdateWeather = async (condition) => {
+  const autoUpdateWeather = useCallback(async (condition) => {
     try {
       const newStatus = condition === 'Rainy' ? 'Off' : 'On';
       
-      const { data } = await supabase.from('irrigation_control').select('weather_condition').limit(1);
-      if (data && data[0].weather_condition === condition) return;
+      const { data, error: currentWeatherError } = await supabase
+        .from('irrigation_control')
+        .select('weather_condition')
+        .limit(1);
+      if (currentWeatherError) throw currentWeatherError;
+      if (data?.[0]?.weather_condition === condition) return;
 
       const { error } = await supabase
         .from('irrigation_control')
@@ -35,41 +43,39 @@ const IrrigationPage = () => {
         })
         .neq('irrigation_id', 0);
 
-      if (!error) {
-        fetchControls();
-        
-        await supabase.from('system_logs').insert([{
-          action_type: 'Auto-Irrigation',
-          details: `Weather changed to ${condition}. System automatically turned ${newStatus}.`
-        }]);
-
-        // ✅ Auto notification
-        await supabase.from('notifications').insert([{
-          message: `Weather changed to ${condition}. Irrigation automatically turned ${newStatus}.`,
-          type: 'Irrigation',
-          status: 'Pending'
-        }]);
-      }
-    } catch (err) {
-      console.error('Auto-update failed:', err);
-    }
-  };
-
-  const fetchControls = async () => {
-    try {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from('irrigation_control')
-        .select('*')
-        .order('last_updated', { ascending: false });
       if (error) throw error;
-      setControls(data || []);
+
+      await fetchControls();
+      
+      await supabase.from('system_logs').insert([{
+        action_type: 'Auto-Irrigation',
+        details: `Weather changed to ${condition}. System automatically turned ${newStatus}.`
+      }]);
+
+      await supabase.from('notifications').insert([{
+        message: `Weather changed to ${condition}. Irrigation automatically turned ${newStatus}.`,
+        type: 'Irrigation',
+        status: 'Pending'
+      }]);
     } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
+      console.error('Auto-update failed:', err.message);
     }
-  };
+  }, [fetchControls]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(fetchControls, 0);
+    
+    const interval = setInterval(() => {
+      const conditions = ['Sunny', 'Rainy', 'Cloudy'];
+      const randomCondition = conditions[Math.floor(Math.random() * conditions.length)];
+      autoUpdateWeather(randomCondition);
+    }, 15000);
+
+    return () => {
+      window.clearTimeout(timer);
+      clearInterval(interval);
+    };
+  }, [autoUpdateWeather, fetchControls]);
 
   const toggleStatus = async (id, currentStatus) => {
     const newStatus = currentStatus === 'On' ? 'Off' : 'On';
@@ -79,17 +85,16 @@ const IrrigationPage = () => {
         .update({ irrigation_status: newStatus, last_updated: new Date().toISOString() })
         .eq('irrigation_id', id);
       if (error) throw error;
-      fetchControls();
+      await fetchControls();
 
-      // ✅ Auto notification
       await supabase.from('notifications').insert([{
         message: `Irrigation Zone #${id} has been turned ${newStatus} manually.`,
         type: 'Irrigation',
         status: 'Pending'
       }]);
-
     } catch (err) {
-      alert('Failed to update status');
+      console.error('Failed to update irrigation status:', err.message);
+      alert('Failed to update status: ' + err.message);
     }
   };
 
@@ -99,9 +104,10 @@ const IrrigationPage = () => {
         .from('irrigation_control')
         .insert([{ weather_condition: 'Sunny', irrigation_status: 'On' }]);
       if (error) throw error;
-      fetchControls();
-    } catch(err) {
-      alert('Failed');
+      await fetchControls();
+    } catch (err) {
+      console.error('Failed to add irrigation zone:', err.message);
+      alert('Failed to add zone: ' + err.message);
     }
   };
 
@@ -120,9 +126,8 @@ const IrrigationPage = () => {
         .neq('irrigation_id', 0);
 
       if (error) throw error;
-      fetchControls();
+      await fetchControls();
 
-      // ✅ Auto notification
       await supabase.from('notifications').insert([{
         message: `Weather simulated to ${condition}. Irrigation automatically turned ${newStatus}.`,
         type: 'Irrigation',
@@ -131,10 +136,16 @@ const IrrigationPage = () => {
 
       alert(`Weather changed to ${condition}. System automatically turned ${newStatus}.`);
     } catch (err) {
-      console.error(err);
+      console.error('Failed to simulate weather:', err.message);
+      alert('Failed to simulate weather: ' + err.message);
     } finally {
       setLoading(false);
     }
+  };
+
+  const formatTime = (value) => {
+    if (!value) return 'Not updated';
+    return new Date(value).toLocaleTimeString();
   };
 
   return (
@@ -178,7 +189,7 @@ const IrrigationPage = () => {
                 <div className="ic-details">
                   <div className="ic-row"><span>Zone ID</span><span className="text-white">Zone #{zone.irrigation_id}</span></div>
                   <div className="ic-row"><span>Weather</span><span className="text-white">{zone.weather_condition}</span></div>
-                  <div className="ic-row"><span>Last Update</span><span className="text-white">{new Date(zone.last_updated).toLocaleTimeString()}</span></div>
+                  <div className="ic-row"><span>Last Update</span><span className="text-white">{formatTime(zone.last_updated)}</span></div>
                 </div>
                 <button
                   className={`btn w-full mt-4 ${zone.irrigation_status === 'On' ? 'btn-outline border-red-500/50 text-red-400 hover:bg-red-500/10' : 'btn-primary'}`}

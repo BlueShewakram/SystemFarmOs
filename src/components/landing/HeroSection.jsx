@@ -1,4 +1,3 @@
-import React from 'react';
 import { ArrowRight, Play, Droplets, Users, TrendingUp, Zap, Shield } from 'lucide-react';
 import './HeroSection.css';
 
@@ -28,7 +27,7 @@ const HeroSection = () => {
           </h1>
 
           <p className="hero-description">
-            Automate irrigation, manage workers, assign tasks intelligently, and track payroll — all from one unified, powerful platform built for modern agriculture.
+            Automate irrigation, manage workers, assign tasks intelligently, and track payroll - all from one unified, powerful platform built for modern agriculture.
           </p>
 
           <div className="hero-actions">
@@ -62,7 +61,6 @@ const HeroSection = () => {
 
         {/* Right: Floating UI cards composition */}
         <div className="hero-visuals">
-          {/* Main dashboard card — tilted */}
           <div className="vis-main glass float">
             <div className="vis-toolbar">
               <div className="vis-dots">
@@ -99,7 +97,7 @@ const HeroSection = () => {
             </div>
             <div className="fc-info">
               <span className="fc-label">Irrigation</span>
-              <span className="fc-value fc-active">● Active</span>
+              <span className="fc-value fc-active">Active</span>
             </div>
           </div>
 

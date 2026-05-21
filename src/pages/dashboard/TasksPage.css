@@ -101,7 +101,7 @@
 .status-In-Progress { color: #3b82f6; }
 .status-Completed { color: #10b981; }
 
-/* ✅ Modal Fix */
+/* Modal fix */
 .modal-overlay {
   position: fixed;
   inset: 0;

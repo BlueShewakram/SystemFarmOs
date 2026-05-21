@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Plus, Calendar, User, Clock, Loader2, X } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import './TasksPage.css';
@@ -20,22 +20,30 @@ const TasksPage = () => {
   });
 
   const [userRole, setUserRole] = useState('Manager');
-  const [currentWorkerId, setCurrentWorkerId] = useState(null);
 
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       setLoading(true);
       const { data: { user } } = await supabase.auth.getUser();
-      const { data: managerSelf } = await supabase.from('managers').select('manager_id').eq('email', user.email).single();
-      const { data: workerSelf } = await supabase.from('workers').select('user_id').eq('email', user.email).single();
+      if (!user?.email) {
+        setTasks([]);
+        setWorkers([]);
+        return;
+      }
+
+      const { data: managerSelf } = await supabase
+        .from('managers')
+        .select('manager_id')
+        .eq('email', user.email)
+        .maybeSingle();
+      const { data: workerSelf } = await supabase
+        .from('workers')
+        .select('user_id')
+        .eq('email', user.email)
+        .maybeSingle();
       
       const isManager = !!managerSelf;
       setUserRole(isManager ? 'Manager' : 'Worker');
-      setCurrentWorkerId(workerSelf?.user_id);
 
       let tasksQuery = supabase.from('tasks').select(`*, workers (first_name, last_name)`);
       
@@ -48,7 +56,7 @@ const TasksPage = () => {
 
       const { data: workersData, error: workersError } = await supabase
         .from('workers')
-        .select('user_id, first_name, last_name, status');
+        .select('user_id, first_name, last_name, skill_set, status');
       if (workersError) throw workersError;
 
       setTasks(tasksData || []);
@@ -58,7 +66,12 @@ const TasksPage = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setTimeout(fetchData, 0);
+    return () => window.clearTimeout(timer);
+  }, [fetchData]);
 
   const handleInputChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -87,13 +100,11 @@ const TasksPage = () => {
 
       if (error) throw error;
 
-      // ✅ Log to system_logs
       await supabase.from('system_logs').insert([{
         action_type: 'Task Assigned',
         details: `Created task "${formData.task_name}" assigned to Worker ID: ${formData.assigned_user || 'None'}`
       }]);
 
-      // ✅ Auto notification
       const assignedWorker = workers.find(w => w.user_id === parseInt(formData.assigned_user));
       const workerName = assignedWorker
         ? `${assignedWorker.first_name} ${assignedWorker.last_name}`

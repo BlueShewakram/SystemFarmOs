@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Plus, MoreVertical, X, Loader2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import './WorkersPage.css';
@@ -20,11 +20,7 @@ const WorkersPage = () => {
     status: 'Active'
   });
 
-  useEffect(() => {
-    fetchWorkers();
-  }, []);
-
-  const fetchWorkers = async () => {
+  const fetchWorkers = useCallback(async () => {
     try {
       setLoading(true);
       const { data, error } = await supabase
@@ -38,7 +34,12 @@ const WorkersPage = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setTimeout(fetchWorkers, 0);
+    return () => window.clearTimeout(timer);
+  }, [fetchWorkers]);
 
   const handleInputChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -64,13 +65,11 @@ const WorkersPage = () => {
 
       if (error) throw error;
 
-      // ✅ Log to system_logs
       await supabase.from('system_logs').insert([{
         action_type: 'Worker Added',
         details: `Added new worker: ${formData.first_name} ${formData.last_name} (${formData.skill_set})`
       }]);
 
-      // ✅ Auto notification
       await supabase.from('notifications').insert([{
         message: `New worker "${formData.first_name} ${formData.last_name}" has been added to the system.`,
         type: 'System',
@@ -133,7 +132,7 @@ const WorkersPage = () => {
                     <td>
                       <div className="worker-cell">
                         <div className="worker-avatar">
-                          {worker.first_name.charAt(0)}{worker.last_name.charAt(0)}
+                          {(worker.first_name || '?').charAt(0)}{(worker.last_name || '').charAt(0)}
                         </div>
                         <div>
                           <div className="worker-name">{worker.first_name} {worker.last_name}</div>
@@ -143,7 +142,7 @@ const WorkersPage = () => {
                     </td>
                     <td className="text-secondary">{worker.skill_set || 'Unspecified'}</td>
                     <td className="text-secondary">{worker.availability}</td>
-                    <td className="font-medium">₱ {worker.daily_rate}</td>
+                    <td className="font-medium">PHP {worker.daily_rate}</td>
                     <td>
                       <span className={`status-badge ${worker.status === 'Active' ? 'status-active' : 'status-inactive'}`}>
                         <span className="status-dot"></span>
@@ -199,11 +198,11 @@ const WorkersPage = () => {
                     </select>
                   </div>
                   <div className="form-group">
-                    <label>Daily Rate (₱)</label>
+                    <label>Daily Rate (PHP)</label>
                     <input type="number" name="daily_rate" min="0" step="0.01" required value={formData.daily_rate} onChange={handleInputChange} />
                   </div>
                   <div className="form-group">
-                    <label>Hourly Rate (₱)</label>
+                    <label>Hourly Rate (PHP)</label>
                     <input type="number" name="hourly_rate" min="0" step="0.01" required value={formData.hourly_rate} onChange={handleInputChange} />
                   </div>
                 </div>

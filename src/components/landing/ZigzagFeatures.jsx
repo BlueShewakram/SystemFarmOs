@@ -1,4 +1,3 @@
-import React from 'react';
 import { CalendarCheck, CloudRain, Wallet, CheckCircle2, Sparkles } from 'lucide-react';
 import './ZigzagFeatures.css';
 
@@ -48,7 +47,7 @@ const features = [
       <div className="mock-weather">
         <div className="weather-display">
           <CloudRain size={40} className="weather-icon-display" />
-          <div className="weather-temp">23°C</div>
+          <div className="weather-temp">23 C</div>
           <div className="weather-cond">Light Rain</div>
         </div>
         <div className="weather-bar">
@@ -56,7 +55,7 @@ const features = [
         </div>
         <div className="weather-status">
           <span className="pulse-dot blue-dot"></span>
-          <span>Irrigation Paused — Rain Detected</span>
+          <span>Irrigation Paused - Rain Detected</span>
         </div>
       </div>
     )
@@ -69,11 +68,11 @@ const features = [
     color: 'purple',
     mockup: (
       <div className="mock-payroll">
-        <div className="payroll-row"><span className="pay-label">Gross Pay</span><span className="pay-value">₱ 18,500</span></div>
-        <div className="payroll-row"><span className="pay-label">SSS</span><span className="pay-value deduct">- ₱ 450</span></div>
-        <div className="payroll-row"><span className="pay-label">PhilHealth</span><span className="pay-value deduct">- ₱ 200</span></div>
+        <div className="payroll-row"><span className="pay-label">Gross Pay</span><span className="pay-value">PHP 18,500</span></div>
+        <div className="payroll-row"><span className="pay-label">SSS</span><span className="pay-value deduct">- PHP 450</span></div>
+        <div className="payroll-row"><span className="pay-label">PhilHealth</span><span className="pay-value deduct">- PHP 200</span></div>
         <div className="payroll-divider"></div>
-        <div className="payroll-row total"><span className="pay-label">Net Pay</span><span className="pay-value net">₱ 17,850</span></div>
+        <div className="payroll-row total"><span className="pay-label">Net Pay</span><span className="pay-value net">PHP 17,850</span></div>
       </div>
     )
   }

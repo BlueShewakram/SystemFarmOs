@@ -1,4 +1,3 @@
-import React from 'react';
 import { Check, ArrowRight, Star } from 'lucide-react';
 import './PricingTiers.css';
 
@@ -19,7 +18,7 @@ const tiers = [
   },
   {
     name: 'Pro',
-    price: '₱2,490',
+    price: 'PHP 2,490',
     period: '/mo',
     desc: 'Full automation suite for growing farm operations.',
     features: [
@@ -35,7 +34,7 @@ const tiers = [
   },
   {
     name: 'Business',
-    price: '₱9,990',
+    price: 'PHP 9,990',
     period: '/mo',
     desc: 'Enterprise features for large-scale agriculture.',
     features: [

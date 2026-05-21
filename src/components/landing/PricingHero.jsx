@@ -1,4 +1,3 @@
-import React from 'react';
 import { CheckCircle2, ArrowRight, Crown } from 'lucide-react';
 import './PricingHero.css';
 

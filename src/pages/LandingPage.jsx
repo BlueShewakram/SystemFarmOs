@@ -1,4 +1,3 @@
-import React from 'react';
 import HeroSection from '../components/landing/HeroSection';
 import ZigzagFeatures from '../components/landing/ZigzagFeatures';
 import TabbedFeatures from '../components/landing/TabbedFeatures';
@@ -48,7 +47,7 @@ const LandingPage = () => {
 
       <footer className="landing-footer bg-primary border-t border-glass">
         <div className="container">
-          <p className="text-secondary text-center">© 2026 FarmOS. All rights reserved.</p>
+          <p className="text-secondary text-center">Copyright 2026 FarmOS. All rights reserved.</p>
         </div>
       </footer>
     </div>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { DollarSign, FileText, Loader2, Play } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import './PayrollPage.css';
@@ -7,11 +7,7 @@ const PayrollPage = () => {
   const [payrolls, setPayrolls] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchPayroll();
-  }, []);
-
-  const fetchPayroll = async () => {
+  const fetchPayroll = useCallback(async () => {
     try {
       setLoading(true);
       const { data, error } = await supabase
@@ -25,7 +21,12 @@ const PayrollPage = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setTimeout(fetchPayroll, 0);
+    return () => window.clearTimeout(timer);
+  }, [fetchPayroll]);
 
   const runPayroll = async () => {
     try {
@@ -37,6 +38,11 @@ const PayrollPage = () => {
         .eq('status', 'Active');
       
       if (workerError) throw workerError;
+
+      if (!workers.length) {
+        alert('No active workers found for this payroll run.');
+        return;
+      }
 
       const payrollEntries = workers.map(w => ({
         user_id: w.user_id,
@@ -58,7 +64,7 @@ const PayrollPage = () => {
         details: `Generated payroll for ${workers.length} active workers.`
       }]);
 
-      fetchPayroll();
+      await fetchPayroll();
       alert('Payroll generated successfully!');
     } catch (err) {
       alert('Failed to generate payroll: ' + err.message);
@@ -80,9 +86,10 @@ const PayrollPage = () => {
         details: `Payroll ID #${id} marked as Paid.`
       }]);
 
-      fetchPayroll();
+      await fetchPayroll();
     } catch (err) {
-      alert('Failed to update status');
+      console.error('Failed to update payroll status:', err.message);
+      alert('Failed to update status: ' + err.message);
     }
   };
 
@@ -129,8 +136,8 @@ const PayrollPage = () => {
                       {pr.workers ? `${pr.workers.first_name} ${pr.workers.last_name}` : 'Unknown Worker'}
                     </td>
                     <td className="text-secondary">{pr.pay_period}</td>
-                    <td className="text-secondary">₱ {pr.gross_pay}</td>
-                    <td className="font-bold text-accent">₱ {pr.net_pay}</td>
+                    <td className="text-secondary">PHP {pr.gross_pay}</td>
+                    <td className="font-bold text-accent">PHP {pr.net_pay}</td>
                     <td>
                       <span className={`status-badge ${pr.status === 'Paid' ? 'status-active' : 'status-inactive'}`}>
                         <span className="status-dot"></span>{pr.status}

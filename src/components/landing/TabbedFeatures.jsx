@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Activity, Droplets, Users, DollarSign, ArrowRight } from 'lucide-react';
 import './TabbedFeatures.css';
 
@@ -87,14 +87,14 @@ const tabs = [
     visual: (
       <div className="tab-mock-payroll">
         <div className="tmp-header">
-          <div className="tmp-period">May 1–15, 2026</div>
+          <div className="tmp-period">May 1-15, 2026</div>
           <div className="tmp-badge">Computed</div>
         </div>
         <div className="tmp-rows">
-          <div className="tmp-row"><span>Gross</span><span>₱ 18,500</span></div>
-          <div className="tmp-row dim"><span>Deductions</span><span>- ₱ 650</span></div>
+          <div className="tmp-row"><span>Gross</span><span>PHP 18,500</span></div>
+          <div className="tmp-row dim"><span>Deductions</span><span>- PHP 650</span></div>
           <div className="tmp-divider"></div>
-          <div className="tmp-row net"><span>Net Pay</span><span>₱ 17,850</span></div>
+          <div className="tmp-row net"><span>Net Pay</span><span>PHP 17,850</span></div>
         </div>
       </div>
     )

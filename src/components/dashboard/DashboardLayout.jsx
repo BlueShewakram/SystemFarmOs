@@ -1,4 +1,4 @@
-import React from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import {
   Activity,
@@ -12,7 +12,7 @@ import {
   Bell,
   Search,
   ChevronDown,
-  Camera  // Added Camera icon
+  Camera
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
@@ -30,106 +30,139 @@ const navItems = [
 const DashboardLayout = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const [role, setRole] = React.useState('Manager');
-  const [showNotifications, setShowNotifications] = React.useState(false);
-  const [showProfileMenu, setShowProfileMenu] = React.useState(false);
-  const [notifications] = React.useState([
-    { id: 1, text: "System Health: All zones optimal", time: "Just now" },
-    { id: 2, text: "New Task Assigned to you", time: "5m ago" },
-  ]);
+  const [role, setRole] = useState('Manager');
+  const [profile, setProfile] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [notifications, setNotifications] = useState([]);
+  const fileInputRef = useRef(null);
 
-  React.useEffect(() => {
-    if (user) {
-      checkRole();
-      fetchProfile();
-    }
-  }, [user]);
+  const displayName =
+    profile?.full_name ||
+    user?.user_metadata?.full_name ||
+    user?.email?.split('@')[0] ||
+    'FarmOS User';
 
-  const checkRole = async () => {
-    const { data: managerData } = await supabase
+  const avatarUrl = profile?.avatar_url ||
+    `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=10b981&color=fff`;
+
+  const checkRole = useCallback(async () => {
+    if (!user?.email) return;
+
+    const { data: managerData, error } = await supabase
       .from('managers')
       .select('manager_id')
       .eq('email', user.email)
-      .single();
+      .maybeSingle();
 
-    if (managerData) {
-      setRole('Manager');
-    } else {
-      setRole('Worker');
+    if (error) {
+      console.error('Failed to check role:', error.message);
     }
-  };
 
-  const fetchProfile = async () => {
-    const { data } = await supabase
+    setRole(managerData ? 'Manager' : 'Worker');
+  }, [user]);
+
+  const fetchProfile = useCallback(async () => {
+    if (!user?.id) return;
+
+    const { data, error } = await supabase
       .from('profiles')
       .select('*')
-      .eq('id', user?.id)
-      .single();
-    setProfile(data);
-  };
-
-  const handlePhotoUpload = async (event) => {
-  try {
-    setUploading(true);
-    const file = event.target.files[0];
-    if (!file) return;
-
-    // First, check if profile exists, create if it doesn't
-    const { data: existingProfile } = await supabase
-      .from('profiles')
-      .select('id')
       .eq('id', user.id)
-      .single();
+      .maybeSingle();
 
-    if (!existingProfile) {
-      // Create profile if it doesn't exist
-      await supabase
-        .from('profiles')
-        .insert([{ 
-          id: user.id, 
-          full_name: user.user_metadata?.full_name || user.email,
-          role: 'Worker'
-        }]);
+    if (error) {
+      console.error('Failed to load profile:', error.message);
+      setProfile(null);
+      return;
     }
 
-    // Upload photo to storage
-    const fileExt = file.name.split('.').pop();
-    const fileName = `${user.id}/profile-${Date.now()}.${fileExt}`;
+    setProfile(data);
+  }, [user]);
 
-    const { error: uploadError } = await supabase.storage
-      .from('images')
-      .upload(fileName, file);
+  const fetchNotifications = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('notifications')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(8);
 
-    if (uploadError) throw uploadError;
+    if (error) {
+      console.error('Failed to load notifications:', error.message);
+      setNotifications([]);
+      return;
+    }
 
-    // Get public URL
-    const { data: { publicUrl } } = supabase.storage
-      .from('images')
-      .getPublicUrl(fileName);
+    setNotifications(data || []);
+  }, []);
 
-    // Update profile with avatar URL
-    const { error: updateError } = await supabase
-      .from('profiles')
-      .update({ 
-        avatar_url: publicUrl,
-        updated_at: new Date()
-      })
-      .eq('id', user.id);
+  useEffect(() => {
+    if (!user) return undefined;
 
-    if (updateError) throw updateError;
+    const timer = window.setTimeout(() => {
+      checkRole();
+      fetchProfile();
+      fetchNotifications();
+    }, 0);
 
-    // Update local state
-    setProfile({ ...profile, avatar_url: publicUrl });
-    alert('Profile photo uploaded and saved!');
-    
-  } catch (error) {
-    console.error('Upload error:', error);
-    alert('Error: ' + error.message);
-  } finally {
-    setUploading(false);
-    setShowProfileMenu(false);
-  }
-};
+    return () => window.clearTimeout(timer);
+  }, [checkRole, fetchNotifications, fetchProfile, user]);
+
+  const handlePhotoUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file || !user?.id) return;
+
+    try {
+      setUploading(true);
+
+      await supabase
+        .from('profiles')
+        .upsert([{
+          id: user.id,
+          full_name: displayName,
+          role,
+          updated_at: new Date().toISOString()
+        }], { onConflict: 'id' });
+
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${user.id}/profile-${Date.now()}.${fileExt}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('images')
+        .upload(fileName, file);
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('images')
+        .getPublicUrl(fileName);
+
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({
+          avatar_url: publicUrl,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', user.id);
+
+      if (updateError) throw updateError;
+
+      setProfile((current) => ({
+        ...current,
+        full_name: current?.full_name || displayName,
+        avatar_url: publicUrl
+      }));
+      alert('Profile photo uploaded and saved.');
+    } catch (error) {
+      console.error('Upload error:', error);
+      alert('Error: ' + error.message);
+    } finally {
+      setUploading(false);
+      setShowProfileMenu(false);
+      event.target.value = '';
+    }
+  };
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -145,7 +178,6 @@ const DashboardLayout = () => {
 
   return (
     <div className="dashboard-layout">
-
       <aside className="sidebar">
         <div className="sidebar-header">
           <div className="sidebar-logo">
@@ -182,7 +214,6 @@ const DashboardLayout = () => {
             <div className="notification-wrapper">
               <button className="icon-btn" onClick={() => setShowNotifications(!showNotifications)}>
                 <Bell size={20} />
-                {/* ✅ Badge shows real count */}
                 {notifications.length > 0 && (
                   <span className="notification-badge">{notifications.length}</span>
                 )}
@@ -192,16 +223,19 @@ const DashboardLayout = () => {
                 <div className="notification-dropdown glass">
                   <div className="dropdown-header">Notifications</div>
                   <div className="dropdown-body">
-                    {/* ✅ Shows real notifications or empty message */}
                     {notifications.length === 0 ? (
                       <div className="notification-item">
                         <p>No notifications yet.</p>
                       </div>
                     ) : (
-                      notifications.map(n => (
-                        <div key={n.id} className="notification-item">
-                          <p>{n.message}</p>
-                          <span>{new Date(n.created_at).toLocaleTimeString()}</span>
+                      notifications.map((notification) => (
+                        <div key={notification.id} className="notification-item">
+                          <p>{notification.message || notification.text || 'Notification'}</p>
+                          <span>
+                            {notification.created_at
+                              ? new Date(notification.created_at).toLocaleTimeString()
+                              : notification.time}
+                          </span>
                         </div>
                       ))
                     )}
@@ -213,11 +247,11 @@ const DashboardLayout = () => {
             <div className="header-user-wrapper" style={{ position: 'relative' }}>
               <div className="header-user" onClick={() => setShowProfileMenu(!showProfileMenu)}>
                 <div className="user-info">
-                  <span className="user-name">{user?.user_metadata?.full_name || user?.email?.split('@')[0]}</span>
+                  <span className="user-name">{displayName}</span>
                   <span className="user-role">{role}</span>
                 </div>
                 <div className="user-avatar">
-                  <img src={`https://ui-avatars.com/api/?name=${user?.user_metadata?.full_name || user?.email}&background=10b981&color=fff`} alt="User Avatar" />
+                  <img src={avatarUrl} alt="User Avatar" />
                 </div>
                 <ChevronDown
                   size={14}
@@ -229,67 +263,77 @@ const DashboardLayout = () => {
                 />
               </div>
 
-             {showProfileMenu && (
-  <div style={{
-    position: 'absolute',
-    top: '100%',
-    right: 0,
-    marginTop: '8px',
-    background: '#1a1a2e',
-    border: '1px solid #333',
-    borderRadius: '8px',
-    minWidth: '220px',
-    zIndex: 1000,
-    padding: '8px'
-  }}>
-    {/* Upload Photo Option */}
-    <div 
-      onClick={() => fileInputRef.current?.click()}
-      style={{
-        padding: '10px 12px',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '12px',
-        cursor: 'pointer',
-        color: 'white',
-        borderRadius: '4px'
-      }}
-      onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
-      onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-    >
-      <Camera size={16} />
-      <span>{uploading ? 'Uploading...' : 'Upload Profile Photo'}</span>
-    </div>
-    
-    <input
-      ref={fileInputRef}
-      type="file"
-      accept="image/jpeg,image/png,image/webp"
-      onChange={handlePhotoUpload}
-      style={{ display: 'none' }}
-    />
-    
-    <div style={{ height: '1px', background: 'rgba(255,255,255,0.1)', margin: '4px 0' }}></div>
-    
-    <div 
-      onClick={handleLogout}
-      style={{
-        padding: '10px 12px',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '12px',
-        cursor: 'pointer',
-        color: '#ff6b6b',
-        borderRadius: '4px'
-      }}
-      onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,107,107,0.1)'}
-      onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-    >
-      <LogOut size={16} />
-      <span>Sign Out</span>
-    </div>
-  </div>
-)}
+              {showProfileMenu && (
+                <div style={{
+                  position: 'absolute',
+                  top: '100%',
+                  right: 0,
+                  marginTop: '8px',
+                  background: '#1a1a2e',
+                  border: '1px solid #333',
+                  borderRadius: '8px',
+                  minWidth: '220px',
+                  zIndex: 1000,
+                  padding: '8px'
+                }}>
+                  <button
+                    type="button"
+                    disabled={uploading}
+                    onClick={() => fileInputRef.current?.click()}
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '12px',
+                      cursor: uploading ? 'wait' : 'pointer',
+                      color: 'white',
+                      background: 'transparent',
+                      border: 'none',
+                      borderRadius: '4px',
+                      textAlign: 'left'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                  >
+                    <Camera size={16} />
+                    <span>{uploading ? 'Uploading...' : 'Upload Profile Photo'}</span>
+                  </button>
+
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    onChange={handlePhotoUpload}
+                    style={{ display: 'none' }}
+                  />
+
+                  <div style={{ height: '1px', background: 'rgba(255,255,255,0.1)', margin: '4px 0' }}></div>
+
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '12px',
+                      cursor: 'pointer',
+                      color: '#ff6b6b',
+                      background: 'transparent',
+                      border: 'none',
+                      borderRadius: '4px',
+                      textAlign: 'left'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,107,107,0.1)'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                  >
+                    <LogOut size={16} />
+                    <span>Sign Out</span>
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </header>
@@ -302,4 +346,4 @@ const DashboardLayout = () => {
   );
 };
 
-export default DashboardLayout; 
+export default DashboardLayout;
