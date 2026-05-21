@@ -1,4 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import LandingPage from './pages/LandingPage';
 import AuthPage from './components/auth/AuthPage';
 import DashboardLayout from './components/dashboard/DashboardLayout';
 import OverviewPage from './pages/dashboard/OverviewPage';
@@ -24,7 +25,7 @@ function App() {
   return (
     <Router>
       <Routes>
-        <Route path="/" element={<Navigate to="/auth" replace />} />
+        <Route path="/" element={<LandingPage />} />
         <Route
           path="/auth"
           element={user ? <Navigate to="/dashboard" replace /> : <AuthPage />}

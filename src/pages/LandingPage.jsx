@@ -2,11 +2,16 @@ import React from 'react';
 import HeroSection from '../components/landing/HeroSection';
 import ZigzagFeatures from '../components/landing/ZigzagFeatures';
 import TabbedFeatures from '../components/landing/TabbedFeatures';
+import farmvid from '../assets/farmvid.mp4';
 import './LandingPage.css';
 
 const LandingPage = () => {
   return (
     <div className="landing-page">
+      <video className="landing-video-bg" autoPlay muted loop playsInline>
+        <source src={farmvid} type="video/mp4" />
+      </video>
+      <div className="landing-video-overlay"></div>
       <nav className="landing-nav glass-panel">
         <div className="container nav-container">
           <div className="logo text-gradient-accent">FarmOS</div>
