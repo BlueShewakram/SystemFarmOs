@@ -8,6 +8,7 @@ import TasksPage from './pages/dashboard/TasksPage';
 import IrrigationPage from './pages/dashboard/IrrigationPage';
 import PayrollPage from './pages/dashboard/PayrollPage';
 import LogsPage from './pages/dashboard/LogsPage';
+import FarmMonitoringPage from './pages/dashboard/FarmMonitoringPage';
 import { useAuth } from './hooks/useAuth';
 import { Loader2 } from 'lucide-react';
 
@@ -35,6 +36,7 @@ function App() {
           element={user ? <DashboardLayout /> : <Navigate to="/auth" replace />}
         >
           <Route index element={<OverviewPage />} />
+          <Route path="monitoring" element={<FarmMonitoringPage />} />
           <Route path="workers" element={<WorkersPage />} />
           <Route path="tasks" element={<TasksPage />} />
           <Route path="irrigation" element={<IrrigationPage />} />

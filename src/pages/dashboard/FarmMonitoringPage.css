@@ -1,0 +1,143 @@
+.farm-monitoring-page {
+  display: grid;
+  gap: 28px;
+}
+
+.farm-monitoring-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.24em;
+  font-size: 0.78rem;
+  color: #6ee7b7;
+  margin-bottom: 8px;
+}
+
+.page-copy {
+  color: var(--text-secondary);
+  max-width: 680px;
+}
+
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 18px;
+  border-radius: var(--radius-full);
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--accent-light);
+  font-weight: 600;
+}
+
+.farm-metrics-grid {
+  display: grid;
+  gap: 20px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.farm-metric-card {
+  padding: 28px;
+  border-radius: var(--radius-xl);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.metric-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.metric-icon {
+  padding: 14px;
+  border-radius: 14px;
+  background: rgba(16, 185, 129, 0.12);
+  color: var(--accent);
+}
+
+.metric-label {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+}
+
+.metric-text {
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+
+.farm-detail-grid {
+  display: grid;
+  gap: 20px;
+  grid-template-columns: 1.5fr 1fr;
+}
+
+.farm-panel {
+  padding: 26px;
+  border-radius: var(--radius-xl);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.farm-panel h3 {
+  margin-bottom: 18px;
+}
+
+.activity-list,
+.alert-list {
+  display: grid;
+  gap: 14px;
+}
+
+.activity-item,
+.alert-item {
+  padding: 18px;
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.activity-item strong,
+.alert-item strong {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.activity-item p,
+.alert-item p {
+  color: var(--text-secondary);
+  font-size: 0.92rem;
+}
+
+.alert-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  margin-right: 14px;
+  background: rgba(248, 113, 113, 0.12);
+  color: #fca5a5;
+}
+
+.alert-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+@media (max-width: 900px) {
+  .farm-detail-grid {
+    grid-template-columns: 1fr;
+  }
+}
