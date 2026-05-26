@@ -13,6 +13,61 @@
   background-repeat: no-repeat;
 }
 
+/* States & Feedback */
+.error-banner {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  color: #fca5a5;
+  padding: 12px 18px;
+  border-radius: var(--radius-md);
+  font-size: 0.88rem;
+}
+
+.state-card {
+  text-align: center;
+  padding: 48px 24px;
+  color: var(--text-secondary);
+  background: var(--bg-card);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--glass-border);
+  grid-column: 1 / -1;
+}
+
+.panel-loading {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 32px;
+}
+
+.skeleton-line {
+  display: block;
+  height: 14px;
+  background: rgba(255,255,255,0.05);
+  border-radius: 6px;
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+.skeleton-block {
+  display: block;
+  height: 180px;
+  background: rgba(255,255,255,0.04);
+  border-radius: var(--radius-md);
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+
+.form-error {
+  font-size: 0.75rem;
+  color: #fca5a5;
+  margin-top: 2px;
+}
+
+
 .tasks-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));

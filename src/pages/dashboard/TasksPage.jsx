@@ -5,7 +5,7 @@ import { supabase } from '../../lib/supabase';
 import { createNotification, createSystemLog, ensureChanged, resolveManagerId } from '../../lib/databaseEvents';
 import './TasksPage.css';
 
-const TaskCard = ({ task, userRole, toggleDropdown, openDropdownId, handleEditClick, handleDeleteTask }) => (
+const TaskCard = ({ task, userRole, currentWorkerId, toggleDropdown, openDropdownId, handleEditClick, handleDeleteTask }) => (
     <div key={task.task_id} className="task-card">
       <div className="task-header">
         <div>
@@ -14,7 +14,7 @@ const TaskCard = ({ task, userRole, toggleDropdown, openDropdownId, handleEditCl
         </div>
         <div className="task-actions">
           <span className={`priority-badge priority-${task.priority}`}>{task.priority}</span>
-          {userRole === 'Manager' && (
+          {(userRole === 'Manager' || (userRole === 'Worker' && Number(task.assigned_user) === Number(currentWorkerId))) && (
             <div className="task-actions-dropdown">
               <button
                 className="btn-icon"
@@ -34,15 +34,17 @@ const TaskCard = ({ task, userRole, toggleDropdown, openDropdownId, handleEditCl
                   >
                     Edit
                   </button>
-                  <button
-                    className="dropdown-item dropdown-item-danger"
-                    onClick={() => {
-                      handleDeleteTask(task.task_id, task.task_name);
-                      toggleDropdown(null);
-                    }}
-                  >
-                    Delete
-                  </button>
+                  {userRole === 'Manager' && (
+                    <button
+                      className="dropdown-item dropdown-item-danger"
+                      onClick={() => {
+                        handleDeleteTask(task.task_id, task.task_name);
+                        toggleDropdown(null);
+                      }}
+                    >
+                      Delete
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -108,20 +110,35 @@ const TasksPage = () => {
         return;
       }
 
+      // Case-insensitive/robust lookups for manager and worker records
+      const userEmail = user.email.trim();
+      const lowerEmail = userEmail.toLowerCase();
+
+      // Check managers table
       const { data: managerSelf } = await supabase
         .from('managers')
         .select('manager_id')
-        .eq('email', user.email)
+        .or(`email.eq.${userEmail},email.eq.${lowerEmail}`)
         .maybeSingle();
+
+      // Check workers table
       const { data: workerSelf } = await supabase
         .from('workers')
-        .select('user_id')
-        .eq('email', user.email)
+        .select('user_id, email, first_name, last_name')
+        .or(`email.eq.${userEmail},email.eq.${lowerEmail}`)
         .maybeSingle();
+      
+      console.log('fetchData - user:', userEmail);
+      console.log('fetchData - workerSelf result:', workerSelf);
       
       const isManager = !!managerSelf;
       setUserRole(isManager ? 'Manager' : 'Worker');
       setCurrentWorkerId(workerSelf?.user_id || null);
+      
+      if (!isManager && !workerSelf) {
+        setErrorMessage(`Your account (${userEmail}) is not linked to any worker record in Workers Management. Please contact your manager.`);
+      }
+
       if (!isManager) setActiveTab('My'); // Force 'My' for workers
 
       let tasksQuery = supabase.from('tasks').select(`*, workers!tasks_assigned_user_fkey (first_name, last_name)`);
@@ -199,8 +216,10 @@ const TasksPage = () => {
 
   const filteredTasks = useMemo(() => {
     let baseTasks = tasks;
-    if (activeTab === 'My') {
-      baseTasks = tasks.filter(t => t.assigned_user === currentWorkerId);
+    if (userRole === 'Worker') {
+      if (activeTab === 'My') {
+        baseTasks = tasks.filter(t => t.assigned_user === currentWorkerId);
+      }
     }
     
     if (queryTokens.length === 0) return baseTasks;
@@ -225,7 +244,7 @@ const TasksPage = () => {
 
       return queryTokens.every((token) => searchText.includes(token));
     });
-  }, [tasks, queryTokens, activeTab, currentWorkerId]);
+  }, [tasks, queryTokens, activeTab, currentWorkerId, userRole]);
 
   const groupedTasks = useMemo(() => {
     if (activeTab !== 'All') return null;
@@ -458,7 +477,7 @@ const TasksPage = () => {
         )}
       </div>
 
-      {userRole === 'Manager' && (
+      {userRole === 'Worker' && (
         <div className="tabs">
           <button className={`tab ${activeTab === 'My' ? 'active' : ''}`} onClick={() => setActiveTab('My')}>My Tasks</button>
           <button className={`tab ${activeTab === 'All' ? 'active' : ''}`} onClick={() => setActiveTab('All')}>All Tasks</button>
@@ -472,14 +491,25 @@ const TasksPage = () => {
           <span className="skeleton-line" style={{ width: '34%' }}></span>
           <span className="skeleton-block"></span>
         </div>
-      ) : activeTab === 'My' ? (
+      ) : (userRole === 'Manager' || activeTab === 'My') ? (
         <div className="tasks-grid">
           {filteredTasks.length === 0 ? (
             <div className="state-card">
-              {showNoTasks ? 'No tasks found.' : `No results for "${trimmedQuery}".`}
+              {filteredTasks.length === 0 && !searchQuery ? 'No tasks found.' : `No results for "${trimmedQuery}".`}
             </div>
           ) : (
-            filteredTasks.map(task => <TaskCard key={task.task_id} task={task} />)
+            filteredTasks.map(task => (
+              <TaskCard
+                key={task.task_id}
+                task={task}
+                userRole={userRole}
+                currentWorkerId={currentWorkerId}
+                openDropdownId={openDropdownId}
+                toggleDropdown={toggleDropdown}
+                handleEditClick={handleEditClick}
+                handleDeleteTask={handleDeleteTask}
+              />
+            ))
           )}
         </div>
       ) : (
@@ -492,7 +522,18 @@ const TasksPage = () => {
               </div>
               {!collapsedWorkers.has(workerId) && (
                 <div className="tasks-grid">
-                  {group.tasks.map(task => <TaskCard key={task.task_id} task={task} />)}
+                  {group.tasks.map(task => (
+                    <TaskCard
+                      key={task.task_id}
+                      task={task}
+                      userRole={userRole}
+                      currentWorkerId={currentWorkerId}
+                      openDropdownId={openDropdownId}
+                      toggleDropdown={toggleDropdown}
+                      handleEditClick={handleEditClick}
+                      handleDeleteTask={handleDeleteTask}
+                    />
+                  ))}
                 </div>
               )}
             </div>
@@ -513,25 +554,27 @@ const TasksPage = () => {
                 <div className="form-grid">
                   <div className="form-group full-width">
                     <label>Task Name</label>
-                    <input type="text" name="task_name" required value={formData.task_name} onChange={handleInputChange} />
+                    <input type="text" name="task_name" required disabled={userRole === 'Worker'} value={formData.task_name} onChange={handleInputChange} />
                     {formErrors.task_name && <span className="form-error">{formErrors.task_name}</span>}
                   </div>
                   <div className="form-group full-width">
                     <label>Description</label>
-                    <input type="text" name="description" value={formData.description} onChange={handleInputChange} />
+                    <input type="text" name="description" disabled={userRole === 'Worker'} value={formData.description} onChange={handleInputChange} />
                   </div>
                   <div className="form-group">
                     <div className="form-label-row">
                       <label>Assign To (Worker)</label>
-                      <button
-                        type="button"
-                        onClick={smartAssign}
-                        className="smart-assign-btn"
-                      >
-                        Smart Auto-Assign
-                      </button>
+                      {userRole === 'Manager' && (
+                        <button
+                          type="button"
+                          onClick={smartAssign}
+                          className="smart-assign-btn"
+                        >
+                          Smart Auto-Assign
+                        </button>
+                      )}
                     </div>
-                    <select name="assigned_user" value={formData.assigned_user} onChange={handleInputChange}>
+                    <select name="assigned_user" disabled={userRole === 'Worker'} value={formData.assigned_user} onChange={handleInputChange}>
                       <option value="">-- Unassigned --</option>
                       {workers.map(w => (
                         <option key={w.user_id} value={w.user_id}>{w.first_name} {w.last_name} ({w.skill_set || 'No Skill'})</option>
@@ -540,12 +583,12 @@ const TasksPage = () => {
                   </div>
                   <div className="form-group">
                     <label>Due Date</label>
-                    <input type="date" name="due_date" value={formData.due_date} onChange={handleInputChange} />
+                    <input type="date" name="due_date" disabled={userRole === 'Worker'} value={formData.due_date} onChange={handleInputChange} />
                     {formErrors.due_date && <span className="form-error">{formErrors.due_date}</span>}
                   </div>
                   <div className="form-group">
                     <label>Priority</label>
-                    <select name="priority" value={formData.priority} onChange={handleInputChange}>
+                    <select name="priority" disabled={userRole === 'Worker'} value={formData.priority} onChange={handleInputChange}>
                       <option value="High">High</option>
                       <option value="Medium">Medium</option>
                       <option value="Low">Low</option>

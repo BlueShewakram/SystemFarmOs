@@ -51,10 +51,30 @@ const AuthPage = () => {
         });
         if (signUpError) throw signUpError;
 
+        // Automatically create a worker entry
+        const names = formData.fullname.split(' ');
+        const first_name = names[0];
+        const last_name = names.slice(1).join(' ') || 'User';
+
+        const { error: workerError } = await supabase
+          .from('workers')
+          .insert([
+            {
+              email: formData.email,
+              first_name,
+              last_name,
+              status: 'Active',
+            },
+          ]);
+
+        if (workerError) {
+          console.error('Error creating worker record:', workerError);
+          // We don't throw here to avoid discouraging sign-up, but log it
+        }
+
         if (data?.session) {
           navigate('/dashboard');
         } else {
-
           setError('Signup successful! Please check your email for verification.');
           setLoading(false);
         }
