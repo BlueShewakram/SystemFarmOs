@@ -46,6 +46,71 @@
   flex-direction: column;
   align-items: flex-end;
   gap: 8px;
+  position: relative; /* Add for dropdown positioning */
+}
+
+.task-actions-dropdown {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.btn-icon {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: var(--radius-sm);
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-icon:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+}
+
+.dropdown-menu {
+  position: absolute;
+  top: 100%; /* Position below the icon */
+  right: 0;
+  background: #0f172a; /* Same as modal content background */
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  z-index: 10;
+  min-width: 120px;
+  overflow: hidden; /* Ensures rounded corners are respected */
+  margin-top: 8px; /* Space between icon and dropdown */
+}
+
+.dropdown-item {
+  display: block;
+  width: 100%;
+  padding: 10px 15px;
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.2s, color 0.2s;
+  font-size: 0.9rem;
+}
+
+.dropdown-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.dropdown-item-danger {
+  color: #ef4444; /* Red color for delete action */
+}
+
+.dropdown-item-danger:hover {
+  background: rgba(239, 68, 68, 0.2);
+  color: #f87171;
 }
 
 .btn-edit-task {
@@ -63,6 +128,26 @@
   background: rgba(16, 185, 129, 0.1);
   border-color: rgba(16, 185, 129, 0.2);
   color: var(--accent);
+}
+
+.btn-delete-task {
+  background: rgba(239, 68, 68, 0.08); /* Light red background */
+  border: 1px solid rgba(239, 68, 68, 0.15); /* Red border */
+  color: #ef4444; /* Red text color */
+  padding: 4px 12px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex; /* To center the icon */
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-delete-task:hover {
+  background: rgba(239, 68, 68, 0.15); /* Slightly darker red background on hover */
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #f87171; /* Lighter red text color on hover */
 }
 
 .task-title {

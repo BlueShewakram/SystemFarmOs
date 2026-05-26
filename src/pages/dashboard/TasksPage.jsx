@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Plus, Calendar, User, Clock, Loader2, X } from 'lucide-react';
+import { Plus, Calendar, User, Clock, Loader2, X, Trash2, MoreVertical } from 'lucide-react';
 import { useOutletContext } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
-import { createNotification, createSystemLog, ensureChanged } from '../../lib/databaseEvents';
+import { createNotification, createSystemLog, ensureChanged, resolveManagerId } from '../../lib/databaseEvents';
 import './TasksPage.css';
 
 const TasksPage = () => {
@@ -210,7 +210,8 @@ const TasksPage = () => {
         await createSystemLog({
           supabase,
           action_type: 'Task Updated',
-          details: `Updated task "${formData.task_name}" (ID: ${editingTaskId})`
+          details: `Updated task "${formData.task_name}" (ID: ${editingTaskId})`,
+          manager_id: await resolveManagerId(supabase)
         });
 
         const assignedWorker = workers.find(w => w.user_id === parseInt(formData.assigned_user));
@@ -236,7 +237,8 @@ const TasksPage = () => {
         await createSystemLog({
           supabase,
           action_type: 'Task Assigned',
-          details: `Created task "${formData.task_name}" assigned to Worker ID: ${formData.assigned_user || 'None'}`
+          details: `Created task "${formData.task_name}" assigned to Worker ID: ${formData.assigned_user || 'None'}`,
+          manager_id: await resolveManagerId(supabase)
         });
 
         const assignedWorker = workers.find(w => w.user_id === parseInt(formData.assigned_user));
@@ -288,6 +290,63 @@ const TasksPage = () => {
     setFormData({ ...formData, assigned_user: bestWorker.user_id.toString() });
   };
 
+  const handleDeleteTask = async (taskId, taskName) => {
+    if (!window.confirm(`Are you sure you want to delete the task "${taskName}"? This action cannot be undone.`)) {
+      return;
+    }
+    setLoading(true); // Indicate loading while deleting
+    setErrorMessage('');
+    try {
+      const { error } = await supabase
+        .from('tasks')
+        .delete()
+        .eq('task_id', taskId);
+
+      if (error) throw error;
+
+      // Optimistic UI update
+      setTasks(currentTasks => currentTasks.filter(task => task.task_id !== taskId));
+
+      await createSystemLog({
+        supabase,
+        action_type: 'Task Deleted',
+        details: `Deleted task "${taskName}" (ID: ${taskId})`,
+        manager_id: await resolveManagerId(supabase)
+      });
+
+      await createNotification({
+        supabase,
+        message: `Task "${taskName}" has been deleted.`,
+        type: 'Task',
+        status: 'Danger'
+      });
+    } catch (err) {
+      console.error('Error deleting task:', err.message);
+      setErrorMessage('Failed to delete task: ' + err.message);
+      await fetchData(); // Re-fetch to ensure UI is in sync if optimistic update failed
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const [openDropdownId, setOpenDropdownId] = useState(null);
+
+  const toggleDropdown = (taskId) => {
+    setOpenDropdownId(openDropdownId === taskId ? null : taskId);
+  };
+
+  useEffect(() => {
+    const handleOutsideClick = (event) => {
+      if (openDropdownId && !event.target.closest('.task-actions-dropdown')) {
+        setOpenDropdownId(null);
+      }
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+    };
+  }, [openDropdownId]);
+
   return (
     <div className="tasks-page">
       <div className="page-header">
@@ -326,13 +385,37 @@ const TasksPage = () => {
                   <div className="task-actions">
                     <span className={`priority-badge priority-${task.priority}`}>{task.priority}</span>
                     {userRole === 'Manager' && (
-                      <button 
-                        className="btn-edit-task" 
-                        onClick={() => handleEditClick(task)}
-                        aria-label="Edit task"
-                      >
-                        Edit
-                      </button>
+                      <div className="task-actions-dropdown">
+                        <button
+                          className="btn-icon"
+                          onClick={() => toggleDropdown(task.task_id)}
+                          aria-label="More task options"
+                        >
+                          <MoreVertical size={16} />
+                        </button>
+                        {openDropdownId === task.task_id && (
+                          <div className="dropdown-menu">
+                            <button
+                              className="dropdown-item"
+                              onClick={() => {
+                                handleEditClick(task);
+                                setOpenDropdownId(null);
+                              }}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              className="dropdown-item dropdown-item-danger"
+                              onClick={() => {
+                                handleDeleteTask(task.task_id, task.task_name);
+                                setOpenDropdownId(null);
+                              }}
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     )}
                   </div>
                 </div>

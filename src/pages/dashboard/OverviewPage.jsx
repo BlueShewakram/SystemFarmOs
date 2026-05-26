@@ -18,6 +18,7 @@ const OverviewPage = () => {
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
   const [currentTime, setCurrentTime] = useState(() => Date.now());
+  const [completedTasksData, setCompletedTasksData] = useState([]);
 
   const fetchStats = useCallback(async () => {
     try {
@@ -25,9 +26,10 @@ const OverviewPage = () => {
       setErrorMessage('');
       const { count: workerCount, error: workerError } = await supabase.from('workers').select('*', { count: 'exact', head: true });
       const { count: taskCount, error: taskError } = await supabase.from('tasks').select('*', { count: 'exact', head: true }).neq('status', 'Completed');
+      const { count: completedTaskCount, error: completedTaskCountError } = await supabase.from('tasks').select('*', { count: 'exact', head: true }).eq('status', 'Completed');
       const { data: irrigationData, error: irrigationError } = await supabase.from('irrigation_control').select('irrigation_status');
       const { data: logsData, error: logsError } = await supabase.from('system_logs').select('*').order('timestamp', { ascending: false }).limit(5);
-      const firstError = workerError || taskError || irrigationError || logsError;
+      const firstError = workerError || taskError || completedTaskCountError || irrigationError || logsError;
       if (firstError) throw firstError;
       
       const activeIrrigation = irrigationData?.filter(i => i.irrigation_status === 'On').length || 0;
@@ -35,6 +37,7 @@ const OverviewPage = () => {
       setStats({
         workers: workerCount || 0,
         tasks: taskCount || 0,
+        completedTasks: completedTaskCount || 0,
         activeIrrigation: activeIrrigation,
         health: 'Optimal'
       });
@@ -47,10 +50,68 @@ const OverviewPage = () => {
     }
   }, []);
 
+  const fetchCompletedTasksTrend = useCallback(async () => {
+    try {
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+      
+      const { data, error } = await supabase
+        .from('tasks')
+        .select('created_at, status')
+        .eq('status', 'Completed')
+        .gte('created_at', sevenDaysAgo.toISOString());
+
+      if (error) throw error;
+
+      const dailyCounts = {};
+      for (let i = 0; i < 7; i++) {
+        const date = new Date();
+        date.setDate(date.getDate() - i);
+        dailyCounts[date.toISOString().split('T')[0]] = 0;
+      }
+
+      data.forEach(task => {
+        const date = new Date(task.created_at).toISOString().split('T')[0];
+        if (dailyCounts[date] !== undefined) {
+          dailyCounts[date]++;
+        }
+      });
+
+      const trendData = Object.keys(dailyCounts).sort().map(date => ({
+        date: date,
+        count: dailyCounts[date]
+      }));
+      setCompletedTasksData(trendData);
+
+    } catch (err) {
+      console.error('Error fetching completed tasks trend:', err.message);
+    }
+  }, []);
+
   useEffect(() => {
     const timer = window.setTimeout(fetchStats, 0);
-    return () => window.clearTimeout(timer);
-  }, [fetchStats]);
+    const trendTimer = window.setTimeout(fetchCompletedTasksTrend, 0);
+    
+    const tasksChannel = supabase
+      .channel('public:tasks')
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'tasks', filter: 'status=eq.Completed' },
+        (payload) => {
+          // Re-fetch the trend data to update the chart
+          fetchCompletedTasksTrend();
+          // Also re-fetch stats to update the total completed tasks card
+          fetchStats();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      window.clearTimeout(timer);
+      window.clearTimeout(trendTimer);
+      supabase.removeChannel(tasksChannel);
+    };
+  }, [fetchStats, fetchCompletedTasksTrend]);
 
   useEffect(() => {
     const timer = window.setInterval(() => setCurrentTime(Date.now()), 60000);
@@ -68,8 +129,8 @@ const OverviewPage = () => {
       trendUp: true
     },
     {
-      label: 'Pending Tasks',
-      value: loading ? '—' : stats.tasks,
+      label: 'Tasks Completed',
+      value: loading ? '—' : stats.completedTasks,
       icon: <CalendarCheck size={20} />,
       accent: '#93c5fd',
       accentBg: 'rgba(59,130,246,0.1)',
@@ -167,19 +228,30 @@ const OverviewPage = () => {
             <h3><TrendingUp size={17} /> Productivity Trends</h3>
           </div>
           <div className="ov-chart">
-            {[40, 70, 55, 90, 65, 78, 82].map((h, i) => (
-              <div key={i} className="ov-bar-wrapper">
-                <div
-                  className="ov-bar"
-                  style={{ height: `${h}%` }}
-                />
-                <span className="ov-bar-label">
-                  {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][i]}
-                </span>
-              </div>
-            ))}
+            {completedTasksData.length > 0 ? (
+              completedTasksData.map((dataPoint, i) => {
+                const totalTasks = completedTasksData.reduce((sum, dp) => sum + dp.count, 0);
+                const percentage = totalTasks > 0 ? (dataPoint.count / totalTasks) * 100 : 0;
+                const dateLabel = new Date(dataPoint.date).toLocaleDateString('en-US', { weekday: 'short' });
+                return (
+                  <div key={i} className="ov-bar-wrapper">
+                    <div
+                      className="ov-bar"
+                      style={{ height: `${percentage}%` }}
+                    />
+                    <span className="ov-bar-label">{dateLabel}</span>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="ov-empty">No completed tasks data for this period.</div>
+            )}
           </div>
-          <p className="ov-chart-note">Farm efficiency increased by 12% this week</p>
+          {completedTasksData.length > 0 && (
+            <p className="ov-chart-note">
+              Total {completedTasksData.reduce((sum, dp) => sum + dp.count, 0)} tasks completed in the last 7 days.
+            </p>
+          )}
         </div>
 
         <div className="ov-panel">
