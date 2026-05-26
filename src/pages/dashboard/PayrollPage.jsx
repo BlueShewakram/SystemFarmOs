@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { DollarSign, FileText, Loader2, Play, X, Printer, Calendar, Users, CheckCircle2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
-import { createNotification, createSystemLog, ensureChanged } from '../../lib/databaseEvents';
+import { createNotification, createSystemLog, ensureChanged, resolveManagerId } from '../../lib/databaseEvents';
 import './PayrollPage.css';
 
 const PayrollPage = () => {
@@ -171,7 +171,7 @@ const PayrollPage = () => {
         const inputs = workerInputs[w.user_id] || { daysWorked: 26, overtimeHours: 0, bonus: 0 };
         const calc = calculateSalaryDetails(w, inputs);
         
-        // Encode detailed breakdown as a structured JSON object in pay_period field
+        // Encode detailed breakdown as a structured JSON object in pay_period_details field (new column, to be created by user)
         const periodPayload = {
           month: `${payMonth} ${payYear}`,
           daysWorked: calc.days,
@@ -191,7 +191,9 @@ const PayrollPage = () => {
         return {
           user_id: w.user_id,
           gross_pay: calc.grossPay,
-          pay_period: JSON.stringify(periodPayload),
+          // Store a simple date string in pay_period, until the DB is migrated to store JSONB in a new column
+          pay_period: `${payYear}-${(new Date(Date.parse(payMonth + " 1, " + payYear)).getMonth() + 1).toString().padStart(2, '0')}-01`,
+          pay_period_details: periodPayload, // This will only be correctly saved if the `pay_period_details` column (JSONB) exists
           status: 'Pending'
         };
       });
@@ -205,10 +207,12 @@ const PayrollPage = () => {
       ensureChanged(insertedPayrolls, 'Payroll generation');
 
       // Add audit log
+      const managerId = await resolveManagerId(supabase);
       await createSystemLog({
         supabase,
         action_type: 'Payroll Generated',
-        details: `Generated interactive payroll for ${activeWorkers.length} workers, pay period: ${payMonth} ${payYear}.`
+        details: `Generated interactive payroll for ${activeWorkers.length} workers, pay period: ${payMonth} ${payYear}.`,
+        manager_id: managerId
       });
 
       await createNotification({
@@ -242,7 +246,8 @@ const PayrollPage = () => {
       await createSystemLog({
         supabase,
         action_type: 'Payment Processed',
-        details: `Payroll record ID #${id} marked as Paid.`
+        details: `Payroll record ID #${id} marked as Paid.`,
+        manager_id: await resolveManagerId(supabase) // Add manager_id here
       });
 
       await createNotification({
@@ -252,7 +257,12 @@ const PayrollPage = () => {
         status: 'Pending'
       });
 
-      await fetchPayroll();
+      // Optimistic UI update: update the status directly in the state
+      setPayrolls(prevPayrolls =>
+        prevPayrolls.map(pr =>
+          pr.payroll_id === id ? { ...pr, status: 'Paid' } : pr
+        )
+      );
       setStatusMessage(`Payroll record #${id} marked as paid.`);
     } catch (err) {
       console.error('Failed to update payroll status:', err.message);
@@ -263,16 +273,29 @@ const PayrollPage = () => {
   // Open Payslip receipt modal
   const handleOpenReceipt = (payrollRecord) => {
     let breakdown = null;
-    let label = payrollRecord.pay_period;
+    let label = '';
 
-    if (payrollRecord.pay_period && payrollRecord.pay_period.startsWith('{')) {
-      try {
-        breakdown = JSON.parse(payrollRecord.pay_period);
-        label = breakdown.month;
-      } catch (err) {
-        console.error('Error parsing pay_period JSON details:', err);
+    // Prioritize new pay_period_details column if available and is an object
+    if (payrollRecord.pay_period_details && typeof payrollRecord.pay_period_details === 'object') {
+      breakdown = payrollRecord.pay_period_details;
+      label = breakdown.month;
+    } else if (payrollRecord.pay_period) {
+      // Fallback for older records or if pay_period_details isn't set
+      if (payrollRecord.pay_period.startsWith('{')) {
+        try {
+          breakdown = JSON.parse(payrollRecord.pay_period);
+          label = breakdown.month;
+        } catch (err) {
+          console.error('Error parsing old pay_period JSON details:', err);
+          // Fallback to simple date formatting if JSON parsing fails
+          label = new Date(payrollRecord.pay_period).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+        }
+      } else {
+        // If it's a simple date string
+        label = new Date(payrollRecord.pay_period).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
       }
     }
+
 
     // Fallback if record does not have the JSON structure (e.g. legacy/older rows)
     if (!breakdown) {
@@ -281,8 +304,8 @@ const PayrollPage = () => {
       const ph = parseFloat((gross * 0.025).toFixed(2));
       const pi = parseFloat((gross * 0.020).toFixed(2));
       const worker = payrollRecord.workers || {};
-      const dailyRate = worker.daily_rate || 500;
-      const days = 30;
+      const dailyRate = worker.daily_rate || 0;
+      const days = 30; // Default or estimate for old records
       const totalDeductions = parseFloat((sss + ph + pi).toFixed(2));
 
       breakdown = {
@@ -317,15 +340,20 @@ const PayrollPage = () => {
   };
 
   const getPayrollNetPay = (record) => {
-    if (record.pay_period && record.pay_period.startsWith('{')) {
-      try {
-        const breakdown = JSON.parse(record.pay_period);
-        if (typeof breakdown.netPay === 'number') return breakdown.netPay;
-        const totalDeductions = breakdown.totalDeductions
-          ?? ((breakdown.sss || 0) + (breakdown.philhealth || 0) + (breakdown.pagibig || 0));
-        return (record.gross_pay || 0) - totalDeductions;
-      } catch (error) {
-        console.error('Error parsing pay_period JSON details:', error);
+    // Prioritize new pay_period_details for net pay calculation
+    if (record.pay_period_details && typeof record.pay_period_details === 'object' && typeof record.pay_period_details.netPay === 'number') {
+      return record.pay_period_details.netPay;
+    } else if (record.pay_period) {
+      if (record.pay_period.startsWith('{')) {
+        try {
+          const breakdown = JSON.parse(record.pay_period);
+          if (typeof breakdown.netPay === 'number') return breakdown.netPay;
+          const totalDeductions = breakdown.totalDeductions
+            ?? ((breakdown.sss || 0) + (breakdown.philhealth || 0) + (breakdown.pagibig || 0));
+          return (record.gross_pay || 0) - totalDeductions;
+        } catch (error) {
+          console.error('Error parsing old pay_period JSON details for net pay:', error);
+        }
       }
     }
     const gross = record.gross_pay || 0;

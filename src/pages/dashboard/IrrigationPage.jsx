@@ -2,46 +2,37 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Droplets, CloudRain, Sun, RefreshCw, Trash2 } from 'lucide-react';
 import { useOutletContext } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
-import { createNotification, createSystemLog, ensureChanged } from '../../lib/databaseEvents';
+import { createNotification, createSystemLog, ensureChanged, resolveManagerId } from '../../lib/databaseEvents';
 import './IrrigationPage.css';
 
 const IrrigationPage = () => {
   const { searchQuery } = useOutletContext() || { searchQuery: '' };
   const [controls, setControls] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [pendingDeletes, setPendingDeletes] = useState([]);
   const [errorMessage, setErrorMessage] = useState('');
   const [statusMessage, setStatusMessage] = useState('');
-  const pendingDeleteRef = useRef(new Map());
+
 
   const fetchControls = useCallback(async () => {
     try {
       setLoading(true);
-      setErrorMessage('');
+      setErrorMessage(''); // Re-add setErrorMessage
       const { data, error } = await supabase
         .from('irrigation_control')
         .select('*')
         .order('irrigation_id', { ascending: true });
       if (error) throw error;
-      const pendingIds = pendingDeleteRef.current;
-      const filtered = (data || []).filter((zone) => !pendingIds.has(zone.irrigation_id));
-      setControls(filtered);
+      setControls(data || []); // Remove pendingIds filtering
     } catch (err) {
       console.error('Failed to fetch irrigation controls:', err.message);
-      setErrorMessage('Irrigation controls could not be loaded. Please refresh or check your database connection.');
+      setErrorMessage('Irrigation controls could not be loaded. Please refresh or check your database connection.'); // Re-add setErrorMessage
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    const pendingDeletes = pendingDeleteRef.current;
-    return () => {
-      pendingDeletes.forEach(({ timeoutId }) => {
-        window.clearTimeout(timeoutId);
-      });
-      pendingDeletes.clear();
-    };
+    // No cleanup related to pendingDeleteRef needed anymore
   }, []);
 
   useEffect(() => {
@@ -51,7 +42,6 @@ const IrrigationPage = () => {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'irrigation_control' },
         (payload) => {
-          const pendingIds = pendingDeleteRef.current;
 
           if (payload.eventType === 'DELETE') {
             const deletedId = payload.old?.irrigation_id;
@@ -62,7 +52,6 @@ const IrrigationPage = () => {
 
           const nextRow = payload.new;
           if (!nextRow) return;
-          if (pendingIds.has(nextRow.irrigation_id)) return;
 
           setControls((current) => {
             const exists = current.some((zone) => zone.irrigation_id === nextRow.irrigation_id);
@@ -120,7 +109,8 @@ const IrrigationPage = () => {
       await createSystemLog({
         supabase,
         action_type: 'Auto-Irrigation',
-        details: `Weather changed to ${condition}. System automatically turned ${newStatus}.`
+        details: `Weather changed to ${condition}. System automatically turned ${newStatus}.`,
+        manager_id: await resolveManagerId(supabase)
       });
 
       await createNotification({
@@ -150,7 +140,7 @@ const IrrigationPage = () => {
     };
   }, [autoUpdateWeather, fetchControls]);
 
-  const toggleStatus = async (id, currentStatus) => {
+  const toggleStatus = async (id, currentStatus, displayNumber) => {
     const newStatus = currentStatus === 'On' ? 'Off' : 'On';
     const nextTimestamp = new Date().toISOString();
     setControls((current) => current.map((zone) => (
@@ -170,16 +160,17 @@ const IrrigationPage = () => {
       await createSystemLog({
         supabase,
         action_type: 'Irrigation Status Updated',
-        details: `Irrigation Zone #${id} was turned ${newStatus} manually.`
+        details: `Irrigation Zone #${displayNumber} (ID: ${id}) was turned ${newStatus} manually.`,
+        manager_id: await resolveManagerId(supabase)
       });
 
       await createNotification({
         supabase,
-        message: `Irrigation Zone #${id} has been turned ${newStatus} manually.`,
+        message: `Irrigation Zone #${displayNumber} (ID: ${id}) has been turned ${newStatus} manually.`,
         type: 'Irrigation',
         status: 'Pending'
       });
-      setStatusMessage(`Zone #${id} turned ${newStatus}.`);
+      setStatusMessage(`Zone #${displayNumber} turned ${newStatus}.`);
     } catch (err) {
       console.error('Failed to update irrigation status:', err.message);
       await fetchControls();
@@ -187,70 +178,36 @@ const IrrigationPage = () => {
     }
   };
 
-  const finalizeZoneRemoval = useCallback(async (id) => {
-    const pending = pendingDeleteRef.current.get(id);
-    if (!pending) return;
-
-    pendingDeleteRef.current.delete(id);
-    setPendingDeletes((current) => current.filter((zone) => zone.irrigation_id !== id));
-
+  const removeZone = useCallback(async (zoneId, displayNumber) => {
     try {
-      const { data, error } = await supabase
+      setControls((current) => current.filter((zone) => zone.irrigation_id !== zoneId)); // Optimistic UI update
+
+      const { error } = await supabase
         .from('irrigation_control')
         .delete()
-        .eq('irrigation_id', id)
-        .select('irrigation_id');
+        .eq('irrigation_id', zoneId);
       if (error) throw error;
-      ensureChanged(data, 'Irrigation zone removal');
 
       await createSystemLog({
         supabase,
         action_type: 'Irrigation Zone Removed',
-        details: `Irrigation Zone #${id} was removed.`
+        details: `Irrigation Zone #${displayNumber} (ID: ${zoneId}) was removed.`,
+        manager_id: await resolveManagerId(supabase)
       });
 
       await createNotification({
         supabase,
-        message: `Irrigation Zone #${id} has been removed.`,
+        message: `Irrigation Zone #${displayNumber} (ID: ${zoneId}) has been removed.`,
         type: 'Irrigation',
         status: 'Pending'
       });
+      setStatusMessage(`Zone #${displayNumber} removed permanently.`);
     } catch (err) {
       console.error('Failed to remove irrigation zone:', err.message);
-      setControls((current) => {
-        const restored = [...current, pending.zone];
-        return restored.sort((a, b) => a.irrigation_id - b.irrigation_id);
-      });
+      await fetchControls(); // Re-fetch to sync with DB if error
       setErrorMessage('Failed to remove zone: ' + err.message);
     }
-  }, []);
-
-  const removeZone = (zone, displayNumber) => {
-    const id = zone.irrigation_id;
-    if (pendingDeleteRef.current.has(id)) return;
-
-    setControls((current) => current.filter((item) => item.irrigation_id !== id));
-    setPendingDeletes((current) => [...current, { ...zone, displayNumber }]);
-
-    const timeoutId = window.setTimeout(() => {
-      finalizeZoneRemoval(id);
-    }, 4500);
-
-    pendingDeleteRef.current.set(id, { zone: { ...zone, displayNumber }, timeoutId });
-  };
-
-  const undoRemove = (id) => {
-    const pending = pendingDeleteRef.current.get(id);
-    if (!pending) return;
-
-    window.clearTimeout(pending.timeoutId);
-    pendingDeleteRef.current.delete(id);
-    setPendingDeletes((current) => current.filter((zone) => zone.irrigation_id !== id));
-    setControls((current) => {
-      const restored = [...current, pending.zone];
-      return restored.sort((a, b) => a.irrigation_id - b.irrigation_id);
-    });
-  };
+  }, [fetchControls, resolveManagerId]);
 
   const addSimulatedZone = async () => {
     try {
@@ -264,7 +221,8 @@ const IrrigationPage = () => {
       await createSystemLog({
         supabase,
         action_type: 'Irrigation Zone Added',
-        details: `Added irrigation Zone #${zoneId || 'new'} with Sunny weather and On status.`
+        details: `Added irrigation Zone #${zoneId || 'new'} with Sunny weather and On status.`,
+        manager_id: await resolveManagerId(supabase)
       });
       await createNotification({
         supabase,
@@ -307,7 +265,8 @@ const IrrigationPage = () => {
       await createSystemLog({
         supabase,
         action_type: 'Weather Simulated',
-        details: `Weather simulated to ${condition}. Irrigation automatically turned ${newStatus}.`
+        details: `Weather simulated to ${condition}. Irrigation automatically turned ${newStatus}.`,
+        manager_id: await resolveManagerId(supabase)
       });
 
       await createNotification({
@@ -421,7 +380,7 @@ const IrrigationPage = () => {
               <div key={zone.irrigation_id} className={`irrigation-card ${zone.irrigation_status === 'On' ? 'is-active' : ''} weather-${(zone.weather_condition || 'cloudy').toLowerCase()}`}>
                 <button
                   className="irrigation-remove-icon"
-                  onClick={() => removeZone(zone, displayNumber)}
+                  onClick={() => removeZone(zone.irrigation_id, displayNumber)}
                   type="button"
                   aria-label={`Remove zone ${displayNumber}`}
                   title="Remove zone"
@@ -454,12 +413,11 @@ const IrrigationPage = () => {
                     </span>
                     <button
                       className={`toggle-switch ${zone.irrigation_status === 'On' ? 'toggled' : ''}`}
-                      onClick={() => toggleStatus(zone.irrigation_id, zone.irrigation_status)}
+                      onClick={() => toggleStatus(zone.irrigation_id, zone.irrigation_status, displayNumber)}
                       aria-label="Toggle irrigation"
                     >
                       <span className="toggle-slider"></span>
-                    </button>
-                  </div>
+                    </button>                  </div>
                 </div>
               </div>
             )})
@@ -467,26 +425,7 @@ const IrrigationPage = () => {
         </div>
       )}
 
-      {pendingDeletes.length > 0 && (
-        <div className="irrigation-undo-stack">
-          {pendingDeletes.map((zone) => {
-            const displayNumber = zone.displayNumber ?? displayOrderMap.get(zone.irrigation_id) ?? zone.irrigation_id;
 
-            return (
-              <div key={zone.irrigation_id} className="irrigation-undo">
-                <span>Zone #{displayNumber} removed.</span>
-                <button
-                  type="button"
-                  className="btn btn-ghost btn-sm"
-                  onClick={() => undoRemove(zone.irrigation_id)}
-                >
-                  Undo
-                </button>
-              </div>
-            );
-          })}
-        </div>
-      )}
     </div>
   );
 };
