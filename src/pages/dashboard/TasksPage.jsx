@@ -5,6 +5,72 @@ import { supabase } from '../../lib/supabase';
 import { createNotification, createSystemLog, ensureChanged, resolveManagerId } from '../../lib/databaseEvents';
 import './TasksPage.css';
 
+const TaskCard = ({ task, userRole, toggleDropdown, openDropdownId, handleEditClick, handleDeleteTask }) => (
+    <div key={task.task_id} className="task-card">
+      <div className="task-header">
+        <div>
+          <div className="task-title">{task.task_name}</div>
+          <div className="task-desc">{task.description || 'No description provided.'}</div>
+        </div>
+        <div className="task-actions">
+          <span className={`priority-badge priority-${task.priority}`}>{task.priority}</span>
+          {userRole === 'Manager' && (
+            <div className="task-actions-dropdown">
+              <button
+                className="btn-icon"
+                onClick={() => toggleDropdown(task.task_id)}
+                aria-label="More task options"
+              >
+                <MoreVertical size={16} />
+              </button>
+              {openDropdownId === task.task_id && (
+                <div className="dropdown-menu">
+                  <button
+                    className="dropdown-item"
+                    onClick={() => {
+                      handleEditClick(task);
+                      toggleDropdown(null);
+                    }}
+                  >
+                    Edit
+                  </button>
+                  <button
+                    className="dropdown-item dropdown-item-danger"
+                    onClick={() => {
+                      handleDeleteTask(task.task_id, task.task_name);
+                      toggleDropdown(null);
+                    }}
+                  >
+                    Delete
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+      <div className="task-meta">
+        <div className="meta-row">
+          <span className="meta-label"><User size={14} /> Assigned to</span>
+          <span className="meta-value">
+            {task.workers ? `${task.workers.first_name} ${task.workers.last_name}` : 'Unassigned'}
+          </span>
+        </div>
+        <div className="meta-row">
+          <span className="meta-label"><Calendar size={14} /> Due Date</span>
+          <span className="meta-value">
+            {task.due_date ? new Date(task.due_date).toLocaleDateString() : 'No deadline'}
+          </span>
+        </div>
+        <div className="meta-row mt-2">
+          <span className={`status-indicator status-${task.status.replace(' ', '-')}`}>
+            <Clock size={14} /> {task.status}
+          </span>
+        </div>
+      </div>
+    </div>
+);
+
 const TasksPage = () => {
   const { searchQuery } = useOutletContext() || { searchQuery: '' };
   const [tasks, setTasks] = useState([]);
@@ -27,6 +93,9 @@ const TasksPage = () => {
   });
 
   const [userRole, setUserRole] = useState('Manager');
+  const [currentWorkerId, setCurrentWorkerId] = useState(null);
+  const [activeTab, setActiveTab] = useState('My'); // 'My' or 'All'
+  const [collapsedWorkers, setCollapsedWorkers] = useState(new Set());
 
   const fetchData = useCallback(async () => {
     try {
@@ -52,13 +121,13 @@ const TasksPage = () => {
       
       const isManager = !!managerSelf;
       setUserRole(isManager ? 'Manager' : 'Worker');
+      setCurrentWorkerId(workerSelf?.user_id || null);
+      if (!isManager) setActiveTab('My'); // Force 'My' for workers
 
       let tasksQuery = supabase.from('tasks').select(`*, workers!tasks_assigned_user_fkey (first_name, last_name)`);
       
-      if (!isManager && workerSelf) {
-        tasksQuery = tasksQuery.eq('assigned_user', workerSelf.user_id);
-      }
-
+      // Managers see everything, workers only their tasks
+      // But we will filter in UI based on tab
       const { data: tasksData, error: tasksError } = await tasksQuery.order('task_id', { ascending: false });
       if (tasksError) throw tasksError;
 
@@ -129,9 +198,14 @@ const TasksPage = () => {
   }, [searchQuery]);
 
   const filteredTasks = useMemo(() => {
-    if (queryTokens.length === 0) return tasks;
+    let baseTasks = tasks;
+    if (activeTab === 'My') {
+      baseTasks = tasks.filter(t => t.assigned_user === currentWorkerId);
+    }
+    
+    if (queryTokens.length === 0) return baseTasks;
 
-    return tasks.filter((task) => {
+    return baseTasks.filter((task) => {
       const workerName = task.workers
         ? `${task.workers.first_name} ${task.workers.last_name}`
         : 'Unassigned';
@@ -151,7 +225,30 @@ const TasksPage = () => {
 
       return queryTokens.every((token) => searchText.includes(token));
     });
-  }, [tasks, queryTokens]);
+  }, [tasks, queryTokens, activeTab, currentWorkerId]);
+
+  const groupedTasks = useMemo(() => {
+    if (activeTab !== 'All') return null;
+    
+    const groups = tasks.reduce((acc, task) => {
+      const workerId = task.assigned_user || 'unassigned';
+      const workerName = task.workers ? `${task.workers.first_name} ${task.workers.last_name}` : 'Unassigned';
+      if (!acc[workerId]) acc[workerId] = { name: workerName, tasks: [] };
+      acc[workerId].tasks.push(task);
+      return acc;
+    }, {});
+    
+    return groups;
+  }, [tasks, activeTab]);
+
+  const toggleWorkerCollapse = (workerId) => {
+    setCollapsedWorkers(prev => {
+      const next = new Set(prev);
+      if (next.has(workerId)) next.delete(workerId);
+      else next.add(workerId);
+      return next;
+    });
+  };
 
   const trimmedQuery = searchQuery?.trim();
   const showNoTasks = !loading && tasks.length === 0;
@@ -361,6 +458,13 @@ const TasksPage = () => {
         )}
       </div>
 
+      {userRole === 'Manager' && (
+        <div className="tabs">
+          <button className={`tab ${activeTab === 'My' ? 'active' : ''}`} onClick={() => setActiveTab('My')}>My Tasks</button>
+          <button className={`tab ${activeTab === 'All' ? 'active' : ''}`} onClick={() => setActiveTab('All')}>All Tasks</button>
+        </div>
+      )}
+
       {errorMessage && <div className="error-banner">{errorMessage}</div>}
 
       {loading ? (
@@ -368,81 +472,34 @@ const TasksPage = () => {
           <span className="skeleton-line" style={{ width: '34%' }}></span>
           <span className="skeleton-block"></span>
         </div>
-      ) : (
+      ) : activeTab === 'My' ? (
         <div className="tasks-grid">
           {filteredTasks.length === 0 ? (
             <div className="state-card">
-              {showNoTasks ? 'No tasks found. Click "Add Task" to assign work.' : `No results for "${trimmedQuery}".`}
+              {showNoTasks ? 'No tasks found.' : `No results for "${trimmedQuery}".`}
             </div>
           ) : (
-            filteredTasks.map(task => (
-              <div key={task.task_id} className="task-card">
-                <div className="task-header">
-                  <div>
-                    <div className="task-title">{task.task_name}</div>
-                    <div className="task-desc">{task.description || 'No description provided.'}</div>
-                  </div>
-                  <div className="task-actions">
-                    <span className={`priority-badge priority-${task.priority}`}>{task.priority}</span>
-                    {userRole === 'Manager' && (
-                      <div className="task-actions-dropdown">
-                        <button
-                          className="btn-icon"
-                          onClick={() => toggleDropdown(task.task_id)}
-                          aria-label="More task options"
-                        >
-                          <MoreVertical size={16} />
-                        </button>
-                        {openDropdownId === task.task_id && (
-                          <div className="dropdown-menu">
-                            <button
-                              className="dropdown-item"
-                              onClick={() => {
-                                handleEditClick(task);
-                                setOpenDropdownId(null);
-                              }}
-                            >
-                              Edit
-                            </button>
-                            <button
-                              className="dropdown-item dropdown-item-danger"
-                              onClick={() => {
-                                handleDeleteTask(task.task_id, task.task_name);
-                                setOpenDropdownId(null);
-                              }}
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-                <div className="task-meta">
-                  <div className="meta-row">
-                    <span className="meta-label"><User size={14} /> Assigned to</span>
-                    <span className="meta-value">
-                      {task.workers ? `${task.workers.first_name} ${task.workers.last_name}` : 'Unassigned'}
-                    </span>
-                  </div>
-                  <div className="meta-row">
-                    <span className="meta-label"><Calendar size={14} /> Due Date</span>
-                    <span className="meta-value">
-                      {task.due_date ? new Date(task.due_date).toLocaleDateString() : 'No deadline'}
-                    </span>
-                  </div>
-                  <div className="meta-row mt-2">
-                    <span className={`status-indicator status-${task.status.replace(' ', '-')}`}>
-                      <Clock size={14} /> {task.status}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            ))
+            filteredTasks.map(task => <TaskCard key={task.task_id} task={task} />)
           )}
         </div>
+      ) : (
+        <div className="tasks-grouped">
+          {Object.entries(groupedTasks || {}).map(([workerId, group]) => (
+            <div key={workerId} className="worker-group">
+              <div className="worker-group-header" onClick={() => toggleWorkerCollapse(workerId)}>
+                <h3>{group.name} ({group.tasks.length})</h3>
+                <span>{collapsedWorkers.has(workerId) ? '+' : '-'}</span>
+              </div>
+              {!collapsedWorkers.has(workerId) && (
+                <div className="tasks-grid">
+                  {group.tasks.map(task => <TaskCard key={task.task_id} task={task} />)}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
       )}
+
 
       {isModalOpen && (
         <div className="modal-overlay">

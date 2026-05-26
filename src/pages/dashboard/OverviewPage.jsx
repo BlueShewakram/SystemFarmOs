@@ -52,16 +52,23 @@ const OverviewPage = () => {
 
   const fetchCompletedTasksTrend = useCallback(async () => {
     try {
+      console.log('Fetching completed tasks trend data...');
       const sevenDaysAgo = new Date();
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+      const sevenDaysAgoISO = sevenDaysAgo.toISOString();
+      console.log('Fetching tasks completed since:', sevenDaysAgoISO);
       
       const { data, error } = await supabase
         .from('tasks')
-        .select('created_at, status')
+        .select('date_assigned, status') // Changed from created_at to date_assigned
         .eq('status', 'Completed')
-        .gte('created_at', sevenDaysAgo.toISOString());
+        .gte('date_assigned', sevenDaysAgoISO); // Changed from created_at to date_assigned
 
-      if (error) throw error;
+      if (error) {
+        console.error('Supabase tasks trend fetch error:', error);
+        throw error;
+      }
+      console.log('Raw completed tasks data from Supabase:', data);
 
       const dailyCounts = {};
       for (let i = 0; i < 7; i++) {
@@ -69,18 +76,21 @@ const OverviewPage = () => {
         date.setDate(date.getDate() - i);
         dailyCounts[date.toISOString().split('T')[0]] = 0;
       }
+      console.log('Initial dailyCounts structure:', dailyCounts);
 
       data.forEach(task => {
-        const date = new Date(task.created_at).toISOString().split('T')[0];
+        const date = new Date(task.date_assigned).toISOString().split('T')[0]; // Changed from created_at to date_assigned
         if (dailyCounts[date] !== undefined) {
           dailyCounts[date]++;
         }
       });
+      console.log('dailyCounts after aggregation:', dailyCounts);
 
       const trendData = Object.keys(dailyCounts).sort().map(date => ({
         date: date,
         count: dailyCounts[date]
       }));
+      console.log('Final trendData for chart:', trendData);
       setCompletedTasksData(trendData);
 
     } catch (err) {
