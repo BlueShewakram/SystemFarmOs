@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Users, CalendarCheck, Droplets, Zap, TrendingUp, AlertTriangle } from 'lucide-react';
+import {
+  Users, CalendarCheck, Droplets, Zap,
+  TrendingUp, AlertTriangle, ArrowUpRight, ArrowDownRight
+} from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import './OverviewPage.css';
 
@@ -13,14 +16,19 @@ const OverviewPage = () => {
   });
   const [recentLogs, setRecentLogs] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [currentTime, setCurrentTime] = useState(() => Date.now());
 
   const fetchStats = useCallback(async () => {
     try {
       setLoading(true);
-      const { count: workerCount } = await supabase.from('workers').select('*', { count: 'exact', head: true });
-      const { count: taskCount } = await supabase.from('tasks').select('*', { count: 'exact', head: true }).neq('status', 'Completed');
-      const { data: irrigationData } = await supabase.from('irrigation_control').select('irrigation_status');
-      const { data: logsData } = await supabase.from('system_logs').select('*').order('timestamp', { ascending: false }).limit(3);
+      setErrorMessage('');
+      const { count: workerCount, error: workerError } = await supabase.from('workers').select('*', { count: 'exact', head: true });
+      const { count: taskCount, error: taskError } = await supabase.from('tasks').select('*', { count: 'exact', head: true }).neq('status', 'Completed');
+      const { data: irrigationData, error: irrigationError } = await supabase.from('irrigation_control').select('irrigation_status');
+      const { data: logsData, error: logsError } = await supabase.from('system_logs').select('*').order('timestamp', { ascending: false }).limit(5);
+      const firstError = workerError || taskError || irrigationError || logsError;
+      if (firstError) throw firstError;
       
       const activeIrrigation = irrigationData?.filter(i => i.irrigation_status === 'On').length || 0;
 
@@ -33,6 +41,7 @@ const OverviewPage = () => {
       setRecentLogs(logsData || []);
     } catch (err) {
       console.error(err);
+      setErrorMessage('Overview data could not be refreshed. Check the Supabase tables and try again.');
     } finally {
       setLoading(false);
     }
@@ -43,62 +52,156 @@ const OverviewPage = () => {
     return () => window.clearTimeout(timer);
   }, [fetchStats]);
 
+  useEffect(() => {
+    const timer = window.setInterval(() => setCurrentTime(Date.now()), 60000);
+    return () => window.clearInterval(timer);
+  }, []);
+
   const cards = [
-    { label: 'Total Workers', value: loading ? '...' : stats.workers, icon: <Users />, color: 'text-accent', bg: 'bg-accent/10' },
-    { label: 'Pending Tasks', value: loading ? '...' : stats.tasks, icon: <CalendarCheck />, color: 'text-blue-400', bg: 'bg-blue-400/10' },
-    { label: 'Active Zones', value: loading ? '...' : stats.activeIrrigation, icon: <Droplets />, color: 'text-cyan-400', bg: 'bg-cyan-400/10' },
-    { label: 'System Health', value: loading ? '...' : stats.health, icon: <Zap />, color: 'text-emerald-400', bg: 'bg-emerald-400/10' },
+    {
+      label: 'Total Workers',
+      value: loading ? '—' : stats.workers,
+      icon: <Users size={20} />,
+      accent: '#6ee7b7',
+      accentBg: 'rgba(16,185,129,0.1)',
+      trend: '+2',
+      trendUp: true
+    },
+    {
+      label: 'Pending Tasks',
+      value: loading ? '—' : stats.tasks,
+      icon: <CalendarCheck size={20} />,
+      accent: '#93c5fd',
+      accentBg: 'rgba(59,130,246,0.1)',
+      trend: null,
+      trendUp: false
+    },
+    {
+      label: 'Active Zones',
+      value: loading ? '—' : stats.activeIrrigation,
+      icon: <Droplets size={20} />,
+      accent: '#67e8f9',
+      accentBg: 'rgba(34,211,238,0.1)',
+      trend: null,
+      trendUp: true
+    },
+    {
+      label: 'System Health',
+      value: loading ? '—' : stats.health,
+      icon: <Zap size={20} />,
+      accent: '#a5f3c4',
+      accentBg: 'rgba(16,185,129,0.1)',
+      trend: '100%',
+      trendUp: true
+    },
   ];
 
+  const getTimeSince = (timestamp) => {
+    if (!timestamp) return '';
+    const diff = currentTime - new Date(timestamp).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'Just now';
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    return `${Math.floor(hrs / 24)}d ago`;
+  };
+
+  const getActionColor = (type) => {
+    if (!type) return 'rgba(255,255,255,0.06)';
+    const t = type.toLowerCase();
+    if (t.includes('auto') || t.includes('irrigation')) return 'rgba(34,211,238,0.12)';
+    if (t.includes('task')) return 'rgba(59,130,246,0.12)';
+    if (t.includes('worker')) return 'rgba(16,185,129,0.12)';
+    if (t.includes('payroll') || t.includes('pay')) return 'rgba(167,139,250,0.12)';
+    return 'rgba(255,255,255,0.06)';
+  };
+
+  const getActionDotColor = (type) => {
+    if (!type) return '#4a5568';
+    const t = type.toLowerCase();
+    if (t.includes('auto') || t.includes('irrigation')) return '#22d3ee';
+    if (t.includes('task')) return '#3b82f6';
+    if (t.includes('worker')) return '#10b981';
+    if (t.includes('payroll') || t.includes('pay')) return '#a78bfa';
+    return '#4a5568';
+  };
+
   return (
-    <div className="overview-page fade-up">
-      <div className="page-header">
-        <div className="page-title">
-          <h2>Dashboard Overview</h2>
-          <p>Real-time monitoring of your smart farm ecosystem.</p>
+    <div className="overview-page">
+      <div className="ov-header">
+        <div>
+          <p className="ov-eyebrow">Dashboard</p>
+          <h2 className="ov-title">Overview</h2>
         </div>
+        <p className="ov-subtitle">Real-time monitoring of your smart farm ecosystem</p>
       </div>
 
-      <div className="stats-grid">
+      {errorMessage && <div className="error-banner">{errorMessage}</div>}
+
+      <div className="ov-stats-grid">
         {cards.map((card, i) => (
-          <div key={i} className="stat-card glass">
-            <div className={`stat-icon ${card.bg} ${card.color}`}>
-              {card.icon}
+          <div key={i} className="ov-stat-card">
+            <div className="ov-stat-top">
+              <div className="ov-stat-icon" style={{ background: card.accentBg, color: card.accent }}>
+                {card.icon}
+              </div>
+              {card.trend && (
+                <span className={`ov-trend ${card.trendUp ? 'up' : 'down'}`}>
+                  {card.trendUp ? <ArrowUpRight size={13} /> : <ArrowDownRight size={13} />}
+                  {card.trend}
+                </span>
+              )}
             </div>
-            <div className="stat-info">
-              <span className="stat-label">{card.label}</span>
-              <span className="stat-value">{card.value}</span>
+            <div className="ov-stat-body">
+              <span className="ov-stat-value">{card.value}</span>
+              <span className="ov-stat-label">{card.label}</span>
             </div>
           </div>
         ))}
       </div>
 
-      <div className="overview-main-grid">
-        <div className="overview-section glass">
-          <h3><TrendingUp size={18} className="text-accent" /> Productivity Trends</h3>
-          <div className="chart-placeholder">
-            <div className="bar" style={{ height: '40%' }}></div>
-            <div className="bar" style={{ height: '70%' }}></div>
-            <div className="bar" style={{ height: '55%' }}></div>
-            <div className="bar" style={{ height: '90%' }}></div>
-            <div className="bar" style={{ height: '65%' }}></div>
+      <div className="ov-panels">
+        <div className="ov-panel ov-panel-wide">
+          <div className="ov-panel-header">
+            <h3><TrendingUp size={17} /> Productivity Trends</h3>
           </div>
-          <p className="text-secondary text-sm mt-4">Farm efficiency increased by 12% this week.</p>
+          <div className="ov-chart">
+            {[40, 70, 55, 90, 65, 78, 82].map((h, i) => (
+              <div key={i} className="ov-bar-wrapper">
+                <div
+                  className="ov-bar"
+                  style={{ height: `${h}%` }}
+                />
+                <span className="ov-bar-label">
+                  {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][i]}
+                </span>
+              </div>
+            ))}
+          </div>
+          <p className="ov-chart-note">Farm efficiency increased by 12% this week</p>
         </div>
 
-        <div className="overview-section glass">
-          <h3><AlertTriangle size={18} className="text-amber-400" /> Recent Alerts</h3>
-          <div className="alerts-list">
+        <div className="ov-panel">
+          <div className="ov-panel-header">
+            <h3><AlertTriangle size={17} /> Recent Activity</h3>
+          </div>
+          <div className="ov-activity-list">
             {recentLogs.length > 0 ? recentLogs.map(log => (
-              <div key={log.log_id} className="alert-item">
-                <div className={`alert-dot ${log.action_type.includes('Auto') ? 'bg-amber-400' : 'bg-blue-400'}`}></div>
-                <div className="alert-text">
-                  <strong>{log.action_type}:</strong> {log.details}
-                  <div className="text-[10px] text-muted mt-1">{new Date(log.timestamp).toLocaleTimeString()}</div>
+              <div
+                key={log.log_id}
+                className="ov-activity-item"
+                style={{ background: getActionColor(log.action_type) }}
+              >
+                <div className="ov-activity-dot" style={{ background: getActionDotColor(log.action_type) }} />
+                <div className="ov-activity-body">
+                  <span className="ov-activity-type">{log.action_type}</span>
+                  <span className="ov-activity-detail">{log.details}</span>
+                  <span className="ov-activity-time">{getTimeSince(log.timestamp)}</span>
                 </div>
               </div>
             )) : (
-              <div className="text-secondary text-sm">No recent alerts.</div>
+              <div className="ov-empty">No recent activity</div>
             )}
           </div>
         </div>

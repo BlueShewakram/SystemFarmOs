@@ -6,7 +6,7 @@
   min-height: 100%;
   background-color: transparent;
   background-image:
-    linear-gradient(180deg, rgba(6, 8, 13, 0.5) 0%, rgba(6, 8, 13, 0.5) 100%),
+    linear-gradient(180deg, rgba(8, 11, 16, 0.9) 0%, rgba(8, 11, 16, 0.94) 100%),
     url('../../assets/taskbg.jpg');
   background-size: cover;
   background-position: center;
@@ -20,11 +20,10 @@
 }
 
 .task-card {
-  background: rgba(15, 23, 42, 0.4);
+  background: var(--bg-card);
   border: 1px solid var(--glass-border);
-  border-radius: 16px;
+  border-radius: var(--radius-md);
   padding: 20px;
-  backdrop-filter: blur(12px);
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -32,14 +31,38 @@
 }
 
 .task-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+  border-color: var(--glass-border-light);
+  box-shadow: none;
 }
 
 .task-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
+}
+
+.task-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.btn-edit-task {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--text-secondary);
+  padding: 4px 12px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-edit-task:hover {
+  background: rgba(16, 185, 129, 0.1);
+  border-color: rgba(16, 185, 129, 0.2);
+  color: var(--accent);
 }
 
 .task-title {
@@ -57,7 +80,7 @@
 
 .priority-badge {
   padding: 4px 8px;
-  border-radius: 8px;
+  border-radius: var(--radius-xs);
   font-size: 0.7rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -131,7 +154,7 @@
   overflow-y: auto;
   background: #0f172a;
   border: 1px solid var(--glass-border);
-  border-radius: 20px;
+  border-radius: var(--radius-md);
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
 }
 
@@ -155,8 +178,9 @@
   border: none;
   color: var(--text-muted);
   cursor: pointer;
-  padding: 4px;
-  border-radius: 8px;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -230,6 +254,7 @@
   border: 1px solid rgba(16, 185, 129, 0.25);
   cursor: pointer;
   transition: background-color 0.2s ease, color 0.2s ease;
+  min-height: 32px;
 }
 
 .tasks-page .smart-assign-btn:hover {

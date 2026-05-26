@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
-import { DollarSign, FileText, Loader2, Play, X, Printer, Calendar, Users, Percent, CheckCircle2, AlertCircle } from 'lucide-react';
+import { DollarSign, FileText, Loader2, Play, X, Printer, Calendar, Users, CheckCircle2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { createNotification, createSystemLog, ensureChanged } from '../../lib/databaseEvents';
 import './PayrollPage.css';
 
 const PayrollPage = () => {
   const [payrolls, setPayrolls] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [statusMessage, setStatusMessage] = useState('');
   
   // Generating payroll states
   const [isRunModalOpen, setIsRunModalOpen] = useState(false);
@@ -29,14 +32,16 @@ const PayrollPage = () => {
   const fetchPayroll = useCallback(async () => {
     try {
       setLoading(true);
+      setErrorMessage('');
       const { data, error } = await supabase
         .from('payroll_records')
         .select(`*, workers (*)`)
-        .order('created_at', { ascending: false });
+        .order('payroll_id', { ascending: false });
       if (error) throw error;
       setPayrolls(data || []);
     } catch (err) {
       console.error('Error fetching payroll records:', err.message);
+      setErrorMessage('Payroll records could not be loaded. Please refresh or check your database connection.');
     } finally {
       setLoading(false);
     }
@@ -46,6 +51,18 @@ const PayrollPage = () => {
     const timer = window.setTimeout(fetchPayroll, 0);
     return () => window.clearTimeout(timer);
   }, [fetchPayroll]);
+
+  useEffect(() => {
+    if (!isRunModalOpen && !isReceiptModalOpen) return undefined;
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape' && !generating) {
+        setIsRunModalOpen(false);
+        setIsReceiptModalOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [generating, isReceiptModalOpen, isRunModalOpen]);
 
   // Open run payroll modal & initialize worker data
   const handleOpenRunModal = async () => {
@@ -59,7 +76,7 @@ const PayrollPage = () => {
       if (error) throw error;
 
       if (!workers || workers.length === 0) {
-        alert('No active workers found in the system. Add active workers in the Workers Management page first.');
+        setErrorMessage('No active workers found. Add active workers in the Workers Management page first.');
         return;
       }
 
@@ -77,7 +94,7 @@ const PayrollPage = () => {
       setWorkerInputs(initialInputs);
       setIsRunModalOpen(true);
     } catch (err) {
-      alert('Failed to retrieve active workers: ' + err.message);
+      setErrorMessage('Failed to retrieve active workers: ' + err.message);
     } finally {
       setGenerating(false);
     }
@@ -148,6 +165,7 @@ const PayrollPage = () => {
   const handleGeneratePayroll = async (e) => {
     e.preventDefault();
     setGenerating(true);
+    setErrorMessage('');
     try {
       const payrollEntries = activeWorkers.map(w => {
         const inputs = workerInputs[w.user_id] || { daysWorked: 26, overtimeHours: 0, bonus: 0 };
@@ -165,41 +183,46 @@ const PayrollPage = () => {
           philhealth: calc.philhealth,
           pagibig: calc.pagibig,
           basicSalary: calc.basicSalary,
-          otSalary: calc.otSalary
+          otSalary: calc.otSalary,
+          totalDeductions: calc.totalDeductions,
+          netPay: calc.netPay
         };
 
         return {
           user_id: w.user_id,
           gross_pay: calc.grossPay,
-          net_pay: calc.netPay,
           pay_period: JSON.stringify(periodPayload),
           status: 'Pending'
         };
       });
 
-      const { error: insertError } = await supabase
+      const { data: insertedPayrolls, error: insertError } = await supabase
         .from('payroll_records')
-        .insert(payrollEntries);
+        .insert(payrollEntries)
+        .select('payroll_id');
 
       if (insertError) throw insertError;
+      ensureChanged(insertedPayrolls, 'Payroll generation');
 
       // Add audit log
-      await supabase.from('system_logs').insert([{
+      await createSystemLog({
+        supabase,
         action_type: 'Payroll Generated',
         details: `Generated interactive payroll for ${activeWorkers.length} workers, pay period: ${payMonth} ${payYear}.`
-      }]);
+      });
 
-      await supabase.from('notifications').insert([{
+      await createNotification({
+        supabase,
         message: `New payroll calculated for ${activeWorkers.length} workers (${payMonth} ${payYear}).`,
         type: 'System',
         status: 'Pending'
-      }]);
+      });
 
       setIsRunModalOpen(false);
-      alert('Automated payroll generated successfully!');
+      setStatusMessage('Automated payroll generated successfully.');
       await fetchPayroll();
     } catch (err) {
-      alert('Failed to generate payroll: ' + err.message);
+      setErrorMessage('Failed to generate payroll: ' + err.message);
     } finally {
       setGenerating(false);
     }
@@ -207,27 +230,33 @@ const PayrollPage = () => {
 
   const markAsPaid = async (id) => {
     try {
-      const { error } = await supabase
+      setErrorMessage('');
+      const { data, error } = await supabase
         .from('payroll_records')
         .update({ status: 'Paid' })
-        .eq('payroll_id', id);
+        .eq('payroll_id', id)
+        .select('payroll_id');
       if (error) throw error;
+      ensureChanged(data, 'Payroll status update');
 
-      await supabase.from('system_logs').insert([{
+      await createSystemLog({
+        supabase,
         action_type: 'Payment Processed',
         details: `Payroll record ID #${id} marked as Paid.`
-      }]);
+      });
 
-      await supabase.from('notifications').insert([{
+      await createNotification({
+        supabase,
         message: `Payment released for Payroll ID #${id}.`,
         type: 'System',
         status: 'Pending'
-      }]);
+      });
 
       await fetchPayroll();
+      setStatusMessage(`Payroll record #${id} marked as paid.`);
     } catch (err) {
       console.error('Failed to update payroll status:', err.message);
-      alert('Failed to update status: ' + err.message);
+      setErrorMessage('Failed to update status: ' + err.message);
     }
   };
 
@@ -248,13 +277,13 @@ const PayrollPage = () => {
     // Fallback if record does not have the JSON structure (e.g. legacy/older rows)
     if (!breakdown) {
       const gross = payrollRecord.gross_pay || 0;
-      const net = payrollRecord.net_pay || 0;
       const sss = parseFloat((gross * 0.045).toFixed(2));
       const ph = parseFloat((gross * 0.025).toFixed(2));
       const pi = parseFloat((gross * 0.020).toFixed(2));
       const worker = payrollRecord.workers || {};
       const dailyRate = worker.daily_rate || 500;
       const days = 30;
+      const totalDeductions = parseFloat((sss + ph + pi).toFixed(2));
 
       breakdown = {
         month: label,
@@ -267,16 +296,40 @@ const PayrollPage = () => {
         philhealth: ph,
         pagibig: pi,
         basicSalary: gross,
-        otSalary: 0
+        otSalary: 0,
+        totalDeductions,
+        netPay: parseFloat((gross - totalDeductions).toFixed(2))
       };
     }
+
+    const totalDeductions = breakdown.totalDeductions
+      ?? parseFloat(((breakdown.sss || 0) + (breakdown.philhealth || 0) + (breakdown.pagibig || 0)).toFixed(2));
+    const netPay = breakdown.netPay
+      ?? parseFloat(((payrollRecord.gross_pay || 0) - totalDeductions).toFixed(2));
 
     setActiveReceipt({
       record: payrollRecord,
       breakdown,
-      label
+      label,
+      netPay
     });
     setIsReceiptModalOpen(true);
+  };
+
+  const getPayrollNetPay = (record) => {
+    if (record.pay_period && record.pay_period.startsWith('{')) {
+      try {
+        const breakdown = JSON.parse(record.pay_period);
+        if (typeof breakdown.netPay === 'number') return breakdown.netPay;
+        const totalDeductions = breakdown.totalDeductions
+          ?? ((breakdown.sss || 0) + (breakdown.philhealth || 0) + (breakdown.pagibig || 0));
+        return (record.gross_pay || 0) - totalDeductions;
+      } catch (error) {
+        console.error('Error parsing pay_period JSON details:', error);
+      }
+    }
+    const gross = record.gross_pay || 0;
+    return gross - ((gross * 0.045) + (gross * 0.025) + (gross * 0.020));
   };
 
   const handlePrint = () => {
@@ -297,9 +350,21 @@ const PayrollPage = () => {
         </div>
       </div>
 
+      {errorMessage && <div className="error-banner">{errorMessage}</div>}
+      {statusMessage && (
+        <div className="payroll-status-banner" role="status">
+          <span>{statusMessage}</span>
+          <button type="button" onClick={() => setStatusMessage('')}>Dismiss</button>
+        </div>
+      )}
+
       <div className="table-container">
         {loading ? (
-          <div className="p-12 flex justify-center"><Loader2 className="animate-spin text-accent w-8 h-8" /></div>
+          <div className="panel-loading" aria-label="Loading payroll records">
+            <span className="skeleton-line" style={{ width: '38%' }}></span>
+            <span className="skeleton-line" style={{ width: '74%' }}></span>
+            <span className="skeleton-block"></span>
+          </div>
         ) : (
           <table className="data-table">
             <thead>
@@ -341,7 +406,7 @@ const PayrollPage = () => {
                       </td>
                       <td className="text-secondary">{displayPeriod}</td>
                       <td className="text-secondary">₱{pr.gross_pay?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                      <td className="font-bold text-accent">₱{pr.net_pay?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                      <td className="font-bold text-accent">₱{getPayrollNetPay(pr).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                       <td>
                         <span className={`status-badge ${pr.status === 'Paid' ? 'status-active' : 'status-inactive'}`}>
                           <span className="status-dot"></span>{pr.status}
@@ -372,13 +437,13 @@ const PayrollPage = () => {
       {/* Interactive Run Payroll Modal */}
       {isRunModalOpen && (
         <div className="modal-overlay">
-          <div className="modal-content payroll-run-modal-content fade-up">
+          <div className="modal-content payroll-run-modal-content fade-up" role="dialog" aria-modal="true" aria-labelledby="run-payroll-title">
             <div className="modal-header">
               <div className="flex items-center gap-2">
                 <Users size={20} className="text-accent" />
-                <h3>Run Interactive Farm Payroll</h3>
+                <h3 id="run-payroll-title">Run Interactive Farm Payroll</h3>
               </div>
-              <button className="close-btn" onClick={() => setIsRunModalOpen(false)}><X size={20} /></button>
+              <button type="button" className="close-btn" aria-label="Close modal" onClick={() => setIsRunModalOpen(false)}><X size={20} /></button>
             </div>
             
             <form onSubmit={handleGeneratePayroll}>
@@ -501,13 +566,13 @@ const PayrollPage = () => {
       {/* Printable Digital Payslip Receipt Modal */}
       {isReceiptModalOpen && activeReceipt && (
         <div className="modal-overlay receipt-modal-overlay">
-          <div className="modal-content receipt-modal-content fade-up">
+          <div className="modal-content receipt-modal-content fade-up" role="dialog" aria-modal="true" aria-labelledby="receipt-title">
             <div className="modal-header hide-on-print">
               <div className="flex items-center gap-2">
                 <FileText size={20} className="text-accent" />
-                <h3>Official Digital Payslip Receipt</h3>
+                <h3 id="receipt-title">Official Digital Payslip Receipt</h3>
               </div>
-              <button className="close-btn" onClick={() => setIsReceiptModalOpen(false)}><X size={20} /></button>
+              <button type="button" className="close-btn" aria-label="Close modal" onClick={() => setIsReceiptModalOpen(false)}><X size={20} /></button>
             </div>
 
             <div className="modal-body printable-payslip-area" id="printable-payslip">
@@ -522,7 +587,7 @@ const PayrollPage = () => {
                   <div className="text-right">
                     <span className="payslip-badge-paid">PAID RECEIPT</span>
                     <p className="pay-id mt-2">Ref ID: #{activeReceipt.record.payroll_id}</p>
-                    <p className="pay-date">Paid Date: {new Date(activeReceipt.record.created_at).toLocaleDateString()}</p>
+                    <p className="pay-date">Paid Date: {activeReceipt.record.created_at ? new Date(activeReceipt.record.created_at).toLocaleDateString() : 'Not recorded'}</p>
                   </div>
                 </div>
               </div>
@@ -606,7 +671,7 @@ const PayrollPage = () => {
                 </div>
                 <div className="text-right">
                   <h1 className="net-pay-value text-accent text-3xl font-extrabold">
-                    ₱{activeReceipt.record.net_pay?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    ₱{activeReceipt.netPay.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </h1>
                 </div>
               </div>

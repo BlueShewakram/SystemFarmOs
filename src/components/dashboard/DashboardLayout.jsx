@@ -1,25 +1,28 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import {
-  Activity,
+  LayoutDashboard,
   Users,
   CalendarCheck,
   Droplets,
   Wallet,
   ClipboardList,
   LogOut,
-  Tractor,
+  Sprout,
   Bell,
   Search,
   ChevronDown,
-  Camera
+  Camera,
+  Menu,
+  X
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { ensureChanged } from '../../lib/databaseEvents';
 import { useAuth } from '../../hooks/useAuth';
 import './DashboardLayout.css';
 
 const navItems = [
-  { path: '/dashboard', icon: <Activity size={20} />, label: 'Overview', end: true },
+  { path: '/dashboard', icon: <LayoutDashboard size={20} />, label: 'Overview', end: true },
   { path: '/dashboard/workers', icon: <Users size={20} />, label: 'Workers' },
   { path: '/dashboard/tasks', icon: <CalendarCheck size={20} />, label: 'Tasks' },
   { path: '/dashboard/irrigation', icon: <Droplets size={20} />, label: 'Irrigation' },
@@ -37,7 +40,11 @@ const DashboardLayout = () => {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [shellMessage, setShellMessage] = useState('');
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const fileInputRef = useRef(null);
+  const notificationRef = useRef(null);
+  const profileRef = useRef(null);
 
   const displayName =
     profile?.full_name ||
@@ -110,6 +117,32 @@ const DashboardLayout = () => {
     return () => window.clearTimeout(timer);
   }, [checkRole, fetchNotifications, fetchProfile, user]);
 
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        setShowNotifications(false);
+        setShowProfileMenu(false);
+        setMobileNavOpen(false);
+      }
+    };
+
+    const handlePointerDown = (event) => {
+      if (notificationRef.current && !notificationRef.current.contains(event.target)) {
+        setShowNotifications(false);
+      }
+      if (profileRef.current && !profileRef.current.contains(event.target)) {
+        setShowProfileMenu(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('pointerdown', handlePointerDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('pointerdown', handlePointerDown);
+    };
+  }, []);
+
   const handlePhotoUpload = async (event) => {
     const file = event.target.files[0];
     if (!file || !user?.id) return;
@@ -117,14 +150,17 @@ const DashboardLayout = () => {
     try {
       setUploading(true);
 
-      await supabase
+      const { data: profileRows, error: profileUpsertError } = await supabase
         .from('profiles')
         .upsert([{
           id: user.id,
           full_name: displayName,
           role,
           updated_at: new Date().toISOString()
-        }], { onConflict: 'id' });
+        }], { onConflict: 'id' })
+        .select('id');
+      if (profileUpsertError) throw profileUpsertError;
+      ensureChanged(profileRows, 'Profile creation');
 
       const fileExt = file.name.split('.').pop();
       const fileName = `${user.id}/profile-${Date.now()}.${fileExt}`;
@@ -139,25 +175,28 @@ const DashboardLayout = () => {
         .from('images')
         .getPublicUrl(fileName);
 
-      const { error: updateError } = await supabase
+      const { data: updatedProfileRows, error: updateError } = await supabase
         .from('profiles')
         .update({
           avatar_url: publicUrl,
           updated_at: new Date().toISOString()
         })
-        .eq('id', user.id);
+        .eq('id', user.id)
+        .select('id');
 
       if (updateError) throw updateError;
+      ensureChanged(updatedProfileRows, 'Profile photo update');
 
+      // Bug fix: update local profile state immediately after upload so the avatar refreshes without a page reload.
       setProfile((current) => ({
         ...current,
         full_name: current?.full_name || displayName,
         avatar_url: publicUrl
       }));
-      alert('Profile photo uploaded and saved.');
+      setShellMessage('Profile photo uploaded and saved.');
     } catch (error) {
       console.error('Upload error:', error);
-      alert('Error: ' + error.message);
+      setShellMessage(`Upload failed: ${error.message}`);
     } finally {
       setUploading(false);
       setShowProfileMenu(false);
@@ -166,7 +205,11 @@ const DashboardLayout = () => {
   };
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      setShellMessage(`Sign out failed: ${error.message}`);
+      return;
+    }
     navigate('/auth');
   };
 
@@ -179,10 +222,10 @@ const DashboardLayout = () => {
 
   return (
     <div className="dashboard-layout">
-      <aside className="sidebar">
+      <aside className={`sidebar ${mobileNavOpen ? 'is-open' : ''}`}>
         <div className="sidebar-header">
           <div className="sidebar-logo">
-            <Tractor size={24} className="text-accent" />
+            <Sprout size={22} className="text-accent" />
             <span className="text-gradient-accent font-bold">FarmOS</span>
           </div>
         </div>
@@ -196,6 +239,7 @@ const DashboardLayout = () => {
                 to={item.path}
                 end={item.end}
                 className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+                onClick={() => setMobileNavOpen(false)}
               >
                 <div className="nav-icon">{item.icon}</div>
                 <span>{item.label}</span>
@@ -207,6 +251,15 @@ const DashboardLayout = () => {
 
       <main className="dashboard-main">
         <header className="dashboard-header">
+          <button
+            type="button"
+            className="mobile-menu-btn"
+            onClick={() => setMobileNavOpen((current) => !current)}
+            aria-label={mobileNavOpen ? 'Close navigation' : 'Open navigation'}
+            aria-expanded={mobileNavOpen}
+          >
+            {mobileNavOpen ? <X size={20} /> : <Menu size={20} />}
+          </button>
           <div className="header-search">
             <Search size={18} className="search-icon" />
             <input
@@ -218,8 +271,14 @@ const DashboardLayout = () => {
             />
           </div>
           <div className="header-actions">
-            <div className="notification-wrapper">
-              <button className="icon-btn" onClick={() => setShowNotifications(!showNotifications)}>
+            <div className="notification-wrapper" ref={notificationRef}>
+              <button
+                className="icon-btn"
+                onClick={() => setShowNotifications(!showNotifications)}
+                aria-label="Open notifications"
+                aria-expanded={showNotifications}
+                type="button"
+              >
                 <Bell size={20} />
                 {notifications.length > 0 && (
                   <span className="notification-badge">{notifications.length}</span>
@@ -227,7 +286,7 @@ const DashboardLayout = () => {
               </button>
 
               {showNotifications && (
-                <div className="notification-dropdown glass">
+                <div className="notification-dropdown">
                   <div className="dropdown-header">Notifications</div>
                   <div className="dropdown-body">
                     {notifications.length === 0 ? (
@@ -236,12 +295,14 @@ const DashboardLayout = () => {
                       </div>
                     ) : (
                       notifications.map((notification) => (
-                        <div key={notification.id} className="notification-item">
+                        <div key={notification.notification_id} className="notification-item">
                           <p>{notification.message || notification.text || 'Notification'}</p>
                           <span>
                             {notification.created_at
                               ? new Date(notification.created_at).toLocaleTimeString()
-                              : notification.time}
+                              : notification.timestamp
+                                ? new Date(notification.timestamp).toLocaleTimeString()
+                                : notification.time}
                           </span>
                         </div>
                       ))
@@ -251,8 +312,14 @@ const DashboardLayout = () => {
               )}
             </div>
 
-            <div className="header-user-wrapper" style={{ position: 'relative' }}>
-              <div className="header-user" onClick={() => setShowProfileMenu(!showProfileMenu)}>
+            <div className="header-user-wrapper" ref={profileRef}>
+              <button
+                type="button"
+                className="header-user"
+                onClick={() => setShowProfileMenu(!showProfileMenu)}
+                aria-label="Open profile menu"
+                aria-expanded={showProfileMenu}
+              >
                 <div className="user-info">
                   <span className="user-name">{displayName}</span>
                   <span className="user-role">{role}</span>
@@ -268,43 +335,18 @@ const DashboardLayout = () => {
                     transition: 'transform 0.2s'
                   }}
                 />
-              </div>
+              </button>
 
               {showProfileMenu && (
-                <div style={{
-                  position: 'absolute',
-                  top: '100%',
-                  right: 0,
-                  marginTop: '8px',
-                  background: '#1a1a2e',
-                  border: '1px solid #333',
-                  borderRadius: '8px',
-                  minWidth: '220px',
-                  zIndex: 1000,
-                  padding: '8px'
-                }}>
+                <div className="profile-dropdown-menu">
                   <button
                     type="button"
+                    className="profile-dropdown-btn"
                     disabled={uploading}
                     onClick={() => fileInputRef.current?.click()}
-                    style={{
-                      width: '100%',
-                      padding: '10px 12px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '12px',
-                      cursor: uploading ? 'wait' : 'pointer',
-                      color: 'white',
-                      background: 'transparent',
-                      border: 'none',
-                      borderRadius: '4px',
-                      textAlign: 'left'
-                    }}
-                    onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
-                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                   >
-                    <Camera size={16} />
-                    <span>{uploading ? 'Uploading...' : 'Upload Profile Photo'}</span>
+                    <Camera size={15} />
+                    <span>{uploading ? 'Uploading...' : 'Upload Photo'}</span>
                   </button>
 
                   <input
@@ -315,28 +357,14 @@ const DashboardLayout = () => {
                     style={{ display: 'none' }}
                   />
 
-                  <div style={{ height: '1px', background: 'rgba(255,255,255,0.1)', margin: '4px 0' }}></div>
+                  <div className="profile-dropdown-divider" />
 
                   <button
                     type="button"
+                    className="profile-dropdown-btn danger"
                     onClick={handleLogout}
-                    style={{
-                      width: '100%',
-                      padding: '10px 12px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '12px',
-                      cursor: 'pointer',
-                      color: '#ff6b6b',
-                      background: 'transparent',
-                      border: 'none',
-                      borderRadius: '4px',
-                      textAlign: 'left'
-                    }}
-                    onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,107,107,0.1)'}
-                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                   >
-                    <LogOut size={16} />
+                    <LogOut size={15} />
                     <span>Sign Out</span>
                   </button>
                 </div>
@@ -346,6 +374,14 @@ const DashboardLayout = () => {
         </header>
 
         <div className="dashboard-content">
+          {shellMessage && (
+            <div className="shell-message" role="status">
+              <span>{shellMessage}</span>
+              <button type="button" onClick={() => setShellMessage('')} aria-label="Dismiss message">
+                <X size={16} />
+              </button>
+            </div>
+          )}
           <Outlet context={{ searchQuery }} />
         </div>
       </main>

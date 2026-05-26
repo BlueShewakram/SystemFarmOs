@@ -1,6 +1,9 @@
 .farm-monitoring-page {
   display: grid;
   gap: 28px;
+  min-height: 100%;
+  padding: 32px;
+  background: linear-gradient(180deg, rgba(8, 11, 16, 0.96), rgba(8, 11, 16, 1));
 }
 
 .farm-monitoring-header {
@@ -29,7 +32,7 @@
   align-items: center;
   gap: 10px;
   padding: 12px 18px;
-  border-radius: var(--radius-full);
+  border-radius: var(--radius-sm);
   background: rgba(16, 185, 129, 0.1);
   color: var(--accent-light);
   font-weight: 600;
@@ -43,9 +46,9 @@
 
 .farm-metric-card {
   padding: 28px;
-  border-radius: var(--radius-xl);
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+  border: 1px solid var(--glass-border);
 }
 
 .metric-top {
@@ -58,7 +61,7 @@
 
 .metric-icon {
   padding: 14px;
-  border-radius: 14px;
+  border-radius: var(--radius-sm);
   background: rgba(16, 185, 129, 0.12);
   color: var(--accent);
 }
@@ -83,9 +86,9 @@
 
 .farm-panel {
   padding: 26px;
-  border-radius: var(--radius-xl);
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+  border: 1px solid var(--glass-border);
 }
 
 .farm-panel h3 {
@@ -101,7 +104,7 @@
 .activity-item,
 .alert-item {
   padding: 18px;
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-sm);
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.06);
 }
@@ -124,7 +127,7 @@
   justify-content: center;
   width: 36px;
   height: 36px;
-  border-radius: 12px;
+  border-radius: var(--radius-sm);
   margin-right: 14px;
   background: rgba(248, 113, 113, 0.12);
   color: #fca5a5;
@@ -140,4 +143,12 @@
   .farm-detail-grid {
     grid-template-columns: 1fr;
   }
+}
+
+@media (max-width: 1024px) {
+  .farm-monitoring-page { padding: 20px; }
+}
+
+@media (max-width: 768px) {
+  .farm-monitoring-page { padding: 16px; }
 }

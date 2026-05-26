@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { 
-  X, Activity, Users, CalendarCheck, Droplets, Wallet, ClipboardList,
-  Plus, Play, CheckCircle2, CloudRain, Sun, FileText, Printer, DollarSign,
-  Info, Cpu, ShieldAlert, BadgeAlert
+  X, Activity, Users, CalendarCheck, Droplets, Wallet,
+  Plus, CloudRain, FileText, Printer, DollarSign,
+  Info, Cpu
 } from 'lucide-react';
 import './InteractiveTourModal.css';
 

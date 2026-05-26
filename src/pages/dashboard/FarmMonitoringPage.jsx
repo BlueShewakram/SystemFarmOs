@@ -13,13 +13,14 @@ const FarmMonitoringPage = () => {
   const [activities, setActivities] = useState([])
   const [alerts, setAlerts] = useState([])
   const [loading, setLoading] = useState(true)
+  const [errorMessage, setErrorMessage] = useState('')
 
   const fetchTableCount = useCallback(async (table) => {
     try {
       const { count, error } = await supabase.from(table).select('*', { count: 'exact', head: true })
       if (error) throw error
       return count || 0
-    } catch (err) {
+    } catch {
       return null
     }
   }, [])
@@ -34,13 +35,14 @@ const FarmMonitoringPage = () => {
 
       if (error) throw error
       return data || []
-    } catch (err) {
+    } catch {
       return []
     }
   }, [])
 
   const refreshFarmData = useCallback(async () => {
     setLoading(true)
+    setErrorMessage('')
 
     const totalLivestock = await fetchTableCount('livestock')
     const availableResources = await fetchTableCount('inventory')
@@ -68,13 +70,20 @@ const FarmMonitoringPage = () => {
       { id: 'fallback-b', message: 'Temperature spike in greenhouse 1', severity: 'critical', created_at: new Date().toISOString() },
     ])
 
+    if ([totalLivestock, availableResources, recentActivities, activeAlerts].some((value) => value === null)) {
+      setErrorMessage('Some monitoring tables are unavailable, so fallback data is being shown.')
+    }
+
     setLoading(false)
   }, [fetchRecentItems, fetchTableCount])
 
   useEffect(() => {
-    refreshFarmData()
+    const timer = window.setTimeout(refreshFarmData, 0)
     const interval = window.setInterval(refreshFarmData, 15000)
-    return () => window.clearInterval(interval)
+    return () => {
+      window.clearTimeout(timer)
+      window.clearInterval(interval)
+    }
   }, [refreshFarmData])
 
   const metrics = useMemo(() => [
@@ -121,9 +130,11 @@ const FarmMonitoringPage = () => {
         </div>
       </div>
 
+      {errorMessage && <div className="error-banner">{errorMessage}</div>}
+
       <div className="farm-metrics-grid">
         {metrics.map((metric) => (
-          <section key={metric.label} className="farm-metric-card glass">
+          <section key={metric.label} className="farm-metric-card">
             <div className="metric-top">
               {metric.icon}
               <strong>{metric.value}</strong>
@@ -137,7 +148,7 @@ const FarmMonitoringPage = () => {
       </div>
 
       <div className="farm-detail-grid">
-        <div className="farm-panel glass">
+        <div className="farm-panel">
           <h3>Latest Activities</h3>
           <div className="activity-list">
             {activities.map((activity) => (
@@ -151,7 +162,7 @@ const FarmMonitoringPage = () => {
           </div>
         </div>
 
-        <div className="farm-panel glass">
+        <div className="farm-panel">
           <h3>Active Alerts</h3>
           <div className="alert-list">
             {alerts.map((alert) => (

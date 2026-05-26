@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Plus, Calendar, User, Clock, Loader2, X } from 'lucide-react';
 import { useOutletContext } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
+import { createNotification, createSystemLog, ensureChanged } from '../../lib/databaseEvents';
 import './TasksPage.css';
 
 const TasksPage = () => {
@@ -10,7 +11,11 @@ const TasksPage = () => {
   const [workers, setWorkers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [editingTaskId, setEditingTaskId] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [formErrors, setFormErrors] = useState({});
 
   const [formData, setFormData] = useState({
     task_name: '',
@@ -26,6 +31,7 @@ const TasksPage = () => {
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
+      setErrorMessage('');
       const { data: { user } } = await supabase.auth.getUser();
       if (!user?.email) {
         setTasks([]);
@@ -47,7 +53,7 @@ const TasksPage = () => {
       const isManager = !!managerSelf;
       setUserRole(isManager ? 'Manager' : 'Worker');
 
-      let tasksQuery = supabase.from('tasks').select(`*, workers (first_name, last_name)`);
+      let tasksQuery = supabase.from('tasks').select(`*, workers!tasks_assigned_user_fkey (first_name, last_name)`);
       
       if (!isManager && workerSelf) {
         tasksQuery = tasksQuery.eq('assigned_user', workerSelf.user_id);
@@ -65,6 +71,7 @@ const TasksPage = () => {
       setWorkers(workersData?.filter(w => w.status === 'Active') || []);
     } catch (err) {
       console.error('Error fetching data:', err.message);
+      setErrorMessage('Tasks could not be loaded. Please refresh or check your database connection.');
     } finally {
       setLoading(false);
     }
@@ -72,8 +79,49 @@ const TasksPage = () => {
 
   useEffect(() => {
     const timer = window.setTimeout(fetchData, 0);
-    return () => window.clearTimeout(timer);
+    
+    // Subscribe to real-time changes
+    const channel = supabase
+      .channel('tasks-realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'tasks'
+        },
+        () => {
+          fetchData();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      window.clearTimeout(timer);
+      supabase.removeChannel(channel);
+    };
   }, [fetchData]);
+
+  useEffect(() => {
+    if (!isModalOpen) {
+      setIsEditMode(false);
+      setEditingTaskId(null);
+      setFormData({
+        task_name: '',
+        description: '',
+        assigned_user: '',
+        priority: 'Medium',
+        status: 'Pending',
+        due_date: ''
+      });
+      return undefined;
+    }
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape' && !saving) setIsModalOpen(false);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isModalOpen, saving]);
 
   const queryTokens = useMemo(() => {
     if (!searchQuery) return [];
@@ -107,56 +155,107 @@ const TasksPage = () => {
 
   const trimmedQuery = searchQuery?.trim();
   const showNoTasks = !loading && tasks.length === 0;
-  const showNoMatches = !loading && tasks.length > 0 && filteredTasks.length === 0 && queryTokens.length > 0;
-
   const handleInputChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
+    setFormErrors((current) => ({ ...current, [e.target.name]: '' }));
   };
 
-  const handleAddTask = async (e) => {
+  const validateTaskForm = () => {
+    const nextErrors = {};
+    if (!formData.task_name.trim()) nextErrors.task_name = 'Task name is required.';
+    if (formData.due_date && Number.isNaN(new Date(formData.due_date).getTime())) {
+      nextErrors.due_date = 'Choose a valid due date.';
+    }
+    setFormErrors(nextErrors);
+    return Object.keys(nextErrors).length === 0;
+  };
+
+  const handleEditClick = (task) => {
+    setFormData({
+      task_name: task.task_name,
+      description: task.description || '',
+      assigned_user: task.assigned_user?.toString() || '',
+      priority: task.priority,
+      status: task.status,
+      due_date: task.due_date || ''
+    });
+    setEditingTaskId(task.task_id);
+    setIsEditMode(true);
+    setIsModalOpen(true);
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!validateTaskForm()) return;
     setSaving(true);
+    setErrorMessage('');
     try {
       const payload = {
         task_name: formData.task_name,
         description: formData.description,
         priority: formData.priority,
         status: formData.status,
-        due_date: formData.due_date || null
+        due_date: formData.due_date || null,
+        assigned_user: formData.assigned_user ? parseInt(formData.assigned_user) : null
       };
 
-      if (formData.assigned_user) {
-        payload.assigned_user = parseInt(formData.assigned_user);
+      if (isEditMode) {
+        const { error } = await supabase
+          .from('tasks')
+          .update(payload)
+          .eq('task_id', editingTaskId);
+
+        if (error) throw error;
+
+        await createSystemLog({
+          supabase,
+          action_type: 'Task Updated',
+          details: `Updated task "${formData.task_name}" (ID: ${editingTaskId})`
+        });
+
+        const assignedWorker = workers.find(w => w.user_id === parseInt(formData.assigned_user));
+        const workerName = assignedWorker
+          ? `${assignedWorker.first_name} ${assignedWorker.last_name}`
+          : 'Unassigned';
+
+        await createNotification({
+          supabase,
+          message: `Task "${formData.task_name}" has been updated and assigned to ${workerName}.`,
+          type: 'Task',
+          status: 'Pending'
+        });
+      } else {
+        const { data, error } = await supabase
+          .from('tasks')
+          .insert([payload])
+          .select(`*, workers!tasks_assigned_user_fkey (first_name, last_name)`);
+
+        if (error) throw error;
+        ensureChanged(data, 'Task creation');
+
+        await createSystemLog({
+          supabase,
+          action_type: 'Task Assigned',
+          details: `Created task "${formData.task_name}" assigned to Worker ID: ${formData.assigned_user || 'None'}`
+        });
+
+        const assignedWorker = workers.find(w => w.user_id === parseInt(formData.assigned_user));
+        const workerName = assignedWorker
+          ? `${assignedWorker.first_name} ${assignedWorker.last_name}`
+          : 'Unassigned';
+
+        await createNotification({
+          supabase,
+          message: `Task "${formData.task_name}" has been assigned to ${workerName}.`,
+          type: 'Task',
+          status: 'Pending'
+        });
       }
 
-      const { data, error } = await supabase
-        .from('tasks')
-        .insert([payload])
-        .select(`*, workers (first_name, last_name)`);
-
-      if (error) throw error;
-
-      await supabase.from('system_logs').insert([{
-        action_type: 'Task Assigned',
-        details: `Created task "${formData.task_name}" assigned to Worker ID: ${formData.assigned_user || 'None'}`
-      }]);
-
-      const assignedWorker = workers.find(w => w.user_id === parseInt(formData.assigned_user));
-      const workerName = assignedWorker
-        ? `${assignedWorker.first_name} ${assignedWorker.last_name}`
-        : 'Unassigned';
-
-      await supabase.from('notifications').insert([{
-        message: `Task "${formData.task_name}" has been assigned to ${workerName}.`,
-        type: 'Task',
-        status: 'Pending'
-      }]);
-
-      setTasks([data[0], ...tasks]);
+      await fetchData();
       setIsModalOpen(false);
-      setFormData({ task_name: '', description: '', assigned_user: '', priority: 'Medium', status: 'Pending', due_date: '' });
     } catch (err) {
-      alert('Failed to add task: ' + err.message);
+      setErrorMessage(`Failed to ${isEditMode ? 'update' : 'add'} task: ` + err.message);
     } finally {
       setSaving(false);
     }
@@ -203,12 +302,17 @@ const TasksPage = () => {
         )}
       </div>
 
+      {errorMessage && <div className="error-banner">{errorMessage}</div>}
+
       {loading ? (
-        <div className="flex justify-center p-12"><Loader2 className="animate-spin text-accent w-8 h-8" /></div>
+        <div className="panel-loading" aria-label="Loading tasks">
+          <span className="skeleton-line" style={{ width: '34%' }}></span>
+          <span className="skeleton-block"></span>
+        </div>
       ) : (
         <div className="tasks-grid">
           {filteredTasks.length === 0 ? (
-            <div className="col-span-full text-center p-12 text-secondary bg-[rgba(15,23,42,0.4)] rounded-2xl border border-white/5">
+            <div className="state-card">
               {showNoTasks ? 'No tasks found. Click "Add Task" to assign work.' : `No results for "${trimmedQuery}".`}
             </div>
           ) : (
@@ -219,7 +323,18 @@ const TasksPage = () => {
                     <div className="task-title">{task.task_name}</div>
                     <div className="task-desc">{task.description || 'No description provided.'}</div>
                   </div>
-                  <span className={`priority-badge priority-${task.priority}`}>{task.priority}</span>
+                  <div className="task-actions">
+                    <span className={`priority-badge priority-${task.priority}`}>{task.priority}</span>
+                    {userRole === 'Manager' && (
+                      <button 
+                        className="btn-edit-task" 
+                        onClick={() => handleEditClick(task)}
+                        aria-label="Edit task"
+                      >
+                        Edit
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <div className="task-meta">
                   <div className="meta-row">
@@ -248,17 +363,18 @@ const TasksPage = () => {
 
       {isModalOpen && (
         <div className="modal-overlay">
-          <div className="modal-content fade-up">
+          <div className="modal-content fade-up" role="dialog" aria-modal="true" aria-labelledby="create-task-title">
             <div className="modal-header">
-              <h3>Create New Task</h3>
-              <button className="close-btn" onClick={() => setIsModalOpen(false)}><X size={20} /></button>
+              <h3 id="create-task-title">{isEditMode ? 'Update Task' : 'Create New Task'}</h3>
+              <button type="button" className="close-btn" aria-label="Close modal" onClick={() => setIsModalOpen(false)}><X size={20} /></button>
             </div>
-            <form onSubmit={handleAddTask}>
+            <form onSubmit={handleSubmit}>
               <div className="modal-body">
                 <div className="form-grid">
                   <div className="form-group full-width">
                     <label>Task Name</label>
                     <input type="text" name="task_name" required value={formData.task_name} onChange={handleInputChange} />
+                    {formErrors.task_name && <span className="form-error">{formErrors.task_name}</span>}
                   </div>
                   <div className="form-group full-width">
                     <label>Description</label>
@@ -285,6 +401,7 @@ const TasksPage = () => {
                   <div className="form-group">
                     <label>Due Date</label>
                     <input type="date" name="due_date" value={formData.due_date} onChange={handleInputChange} />
+                    {formErrors.due_date && <span className="form-error">{formErrors.due_date}</span>}
                   </div>
                   <div className="form-group">
                     <label>Priority</label>
@@ -307,7 +424,7 @@ const TasksPage = () => {
               <div className="modal-footer">
                 <button type="button" className="btn btn-outline" onClick={() => setIsModalOpen(false)}>Cancel</button>
                 <button type="submit" className="btn btn-primary" disabled={saving}>
-                  {saving ? <Loader2 className="animate-spin" size={18} /> : 'Save Task'}
+                  {saving ? <Loader2 className="animate-spin" size={18} /> : (isEditMode ? 'Update Task' : 'Save Task')}
                 </button>
               </div>
             </form>

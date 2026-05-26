@@ -1,15 +1,17 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Activity, Clock, Loader2 } from 'lucide-react';
+import { Activity, Clock } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import './LogsPage.css';
 
 const LogsPage = () => {
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState('');
 
   const fetchLogs = useCallback(async () => {
     try {
       setLoading(true);
+      setErrorMessage('');
       const { data, error } = await supabase
         .from('system_logs')
         .select(`*, managers (first_name, last_name)`)
@@ -18,6 +20,7 @@ const LogsPage = () => {
       setLogs(data || []);
     } catch (err) {
       console.error(err);
+      setErrorMessage('Activity logs could not be loaded. Please refresh or check your database connection.');
     } finally {
       setLoading(false);
     }
@@ -37,9 +40,15 @@ const LogsPage = () => {
         </div>
       </div>
 
-      <div className="logs-container glass">
+      {errorMessage && <div className="error-banner">{errorMessage}</div>}
+
+      <div className="logs-container">
         {loading ? (
-          <div className="p-12 flex justify-center"><Loader2 className="animate-spin text-accent w-8 h-8" /></div>
+          <div className="panel-loading" aria-label="Loading activity logs">
+            <span className="skeleton-line" style={{ width: '42%' }}></span>
+            <span className="skeleton-line" style={{ width: '80%' }}></span>
+            <span className="skeleton-block"></span>
+          </div>
         ) : logs.length === 0 ? (
           <div className="p-12 text-center text-secondary">No recent activity.</div>
         ) : (

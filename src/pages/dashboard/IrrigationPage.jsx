@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Droplets, CloudRain, Sun, Loader2, RefreshCw, Trash2 } from 'lucide-react';
+import { Droplets, CloudRain, Sun, RefreshCw, Trash2 } from 'lucide-react';
 import { useOutletContext } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
+import { createNotification, createSystemLog, ensureChanged } from '../../lib/databaseEvents';
 import './IrrigationPage.css';
 
 const IrrigationPage = () => {
@@ -9,11 +10,14 @@ const IrrigationPage = () => {
   const [controls, setControls] = useState([]);
   const [loading, setLoading] = useState(true);
   const [pendingDeletes, setPendingDeletes] = useState([]);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [statusMessage, setStatusMessage] = useState('');
   const pendingDeleteRef = useRef(new Map());
 
   const fetchControls = useCallback(async () => {
     try {
       setLoading(true);
+      setErrorMessage('');
       const { data, error } = await supabase
         .from('irrigation_control')
         .select('*')
@@ -24,17 +28,19 @@ const IrrigationPage = () => {
       setControls(filtered);
     } catch (err) {
       console.error('Failed to fetch irrigation controls:', err.message);
+      setErrorMessage('Irrigation controls could not be loaded. Please refresh or check your database connection.');
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
+    const pendingDeletes = pendingDeleteRef.current;
     return () => {
-      pendingDeleteRef.current.forEach(({ timeoutId }) => {
+      pendingDeletes.forEach(({ timeoutId }) => {
         window.clearTimeout(timeoutId);
       });
-      pendingDeleteRef.current.clear();
+      pendingDeletes.clear();
     };
   }, []);
 
@@ -91,16 +97,18 @@ const IrrigationPage = () => {
       if (currentWeatherError) throw currentWeatherError;
       if (data?.[0]?.weather_condition === condition) return;
 
-      const { error } = await supabase
+      const { data: updatedRows, error } = await supabase
         .from('irrigation_control')
         .update({ 
           weather_condition: condition, 
           irrigation_status: newStatus,
           last_updated: nextTimestamp
         })
-        .neq('irrigation_id', 0);
+        .neq('irrigation_id', 0)
+        .select('irrigation_id');
 
       if (error) throw error;
+      ensureChanged(updatedRows, 'Automatic irrigation update');
 
       setControls((current) => current.map((zone) => ({
         ...zone,
@@ -109,20 +117,23 @@ const IrrigationPage = () => {
         last_updated: nextTimestamp
       })));
       
-      await supabase.from('system_logs').insert([{
+      await createSystemLog({
+        supabase,
         action_type: 'Auto-Irrigation',
         details: `Weather changed to ${condition}. System automatically turned ${newStatus}.`
-      }]);
+      });
 
-      await supabase.from('notifications').insert([{
+      await createNotification({
+        supabase,
         message: `Weather changed to ${condition}. Irrigation automatically turned ${newStatus}.`,
         type: 'Irrigation',
         status: 'Pending'
-      }]);
+      });
     } catch (err) {
       console.error('Auto-update failed:', err.message);
+      setErrorMessage('Automatic weather update failed: ' + err.message);
     }
-  }, [fetchControls]);
+  }, []);
 
   useEffect(() => {
     const timer = window.setTimeout(fetchControls, 0);
@@ -148,21 +159,31 @@ const IrrigationPage = () => {
         : zone
     )));
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('irrigation_control')
         .update({ irrigation_status: newStatus, last_updated: nextTimestamp })
-        .eq('irrigation_id', id);
+        .eq('irrigation_id', id)
+        .select('irrigation_id');
       if (error) throw error;
+      ensureChanged(data, 'Irrigation status update');
 
-      await supabase.from('notifications').insert([{
+      await createSystemLog({
+        supabase,
+        action_type: 'Irrigation Status Updated',
+        details: `Irrigation Zone #${id} was turned ${newStatus} manually.`
+      });
+
+      await createNotification({
+        supabase,
         message: `Irrigation Zone #${id} has been turned ${newStatus} manually.`,
         type: 'Irrigation',
         status: 'Pending'
-      }]);
+      });
+      setStatusMessage(`Zone #${id} turned ${newStatus}.`);
     } catch (err) {
       console.error('Failed to update irrigation status:', err.message);
       await fetchControls();
-      alert('Failed to update status: ' + err.message);
+      setErrorMessage('Failed to update status: ' + err.message);
     }
   };
 
@@ -174,29 +195,33 @@ const IrrigationPage = () => {
     setPendingDeletes((current) => current.filter((zone) => zone.irrigation_id !== id));
 
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('irrigation_control')
         .delete()
-        .eq('irrigation_id', id);
+        .eq('irrigation_id', id)
+        .select('irrigation_id');
       if (error) throw error;
+      ensureChanged(data, 'Irrigation zone removal');
 
-      await supabase.from('system_logs').insert([{
+      await createSystemLog({
+        supabase,
         action_type: 'Irrigation Zone Removed',
         details: `Irrigation Zone #${id} was removed.`
-      }]);
+      });
 
-      await supabase.from('notifications').insert([{
+      await createNotification({
+        supabase,
         message: `Irrigation Zone #${id} has been removed.`,
         type: 'Irrigation',
         status: 'Pending'
-      }]);
+      });
     } catch (err) {
       console.error('Failed to remove irrigation zone:', err.message);
       setControls((current) => {
         const restored = [...current, pending.zone];
         return restored.sort((a, b) => a.irrigation_id - b.irrigation_id);
       });
-      alert('Failed to remove zone: ' + err.message);
+      setErrorMessage('Failed to remove zone: ' + err.message);
     }
   }, []);
 
@@ -229,14 +254,28 @@ const IrrigationPage = () => {
 
   const addSimulatedZone = async () => {
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('irrigation_control')
-        .insert([{ weather_condition: 'Sunny', irrigation_status: 'On' }]);
+        .insert([{ weather_condition: 'Sunny', irrigation_status: 'On' }])
+        .select('irrigation_id');
       if (error) throw error;
+      ensureChanged(data, 'Irrigation zone creation');
+      const zoneId = data[0]?.irrigation_id;
+      await createSystemLog({
+        supabase,
+        action_type: 'Irrigation Zone Added',
+        details: `Added irrigation Zone #${zoneId || 'new'} with Sunny weather and On status.`
+      });
+      await createNotification({
+        supabase,
+        message: `Irrigation Zone #${zoneId || 'new'} has been added.`,
+        type: 'Irrigation',
+        status: 'Pending'
+      });
       await fetchControls();
     } catch (err) {
       console.error('Failed to add irrigation zone:', err.message);
-      alert('Failed to add zone: ' + err.message);
+      setErrorMessage('Failed to add zone: ' + err.message);
     }
   };
 
@@ -246,16 +285,18 @@ const IrrigationPage = () => {
       const newStatus = condition === 'Rainy' ? 'Off' : 'On';
       const nextTimestamp = new Date().toISOString();
       
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('irrigation_control')
         .update({ 
           weather_condition: condition, 
           irrigation_status: newStatus,
           last_updated: nextTimestamp
         })
-        .neq('irrigation_id', 0);
+        .neq('irrigation_id', 0)
+        .select('irrigation_id');
 
       if (error) throw error;
+      ensureChanged(data, 'Weather simulation');
       setControls((current) => current.map((zone) => ({
         ...zone,
         weather_condition: condition,
@@ -263,16 +304,23 @@ const IrrigationPage = () => {
         last_updated: nextTimestamp
       })));
 
-      await supabase.from('notifications').insert([{
+      await createSystemLog({
+        supabase,
+        action_type: 'Weather Simulated',
+        details: `Weather simulated to ${condition}. Irrigation automatically turned ${newStatus}.`
+      });
+
+      await createNotification({
+        supabase,
         message: `Weather simulated to ${condition}. Irrigation automatically turned ${newStatus}.`,
         type: 'Irrigation',
         status: 'Pending'
-      }]);
+      });
 
-      alert(`Weather changed to ${condition}. System automatically turned ${newStatus}.`);
+      setStatusMessage(`Weather changed to ${condition}. System automatically turned ${newStatus}.`);
     } catch (err) {
       console.error('Failed to simulate weather:', err.message);
-      alert('Failed to simulate weather: ' + err.message);
+      setErrorMessage('Failed to simulate weather: ' + err.message);
     } finally {
       setLoading(false);
     }
@@ -328,8 +376,6 @@ const IrrigationPage = () => {
 
   const trimmedQuery = searchQuery?.trim();
   const showNoZones = !loading && controls.length === 0;
-  const showNoMatches = !loading && controls.length > 0 && filteredControls.length === 0 && queryTokens.length > 0;
-
   return (
     <div className="irrigation-page fade-up">
       <div className="page-header">
@@ -348,12 +394,23 @@ const IrrigationPage = () => {
         </div>
       </div>
 
+      {errorMessage && <div className="error-banner">{errorMessage}</div>}
+      {statusMessage && (
+        <div className="irrigation-status-banner" role="status">
+          <span>{statusMessage}</span>
+          <button type="button" onClick={() => setStatusMessage('')}>Dismiss</button>
+        </div>
+      )}
+
       {loading ? (
-        <div className="flex justify-center p-12"><Loader2 className="animate-spin text-accent w-8 h-8" /></div>
+        <div className="panel-loading" aria-label="Loading irrigation zones">
+          <span className="skeleton-line" style={{ width: '40%' }}></span>
+          <span className="skeleton-block"></span>
+        </div>
       ) : (
         <div className="irrigation-grid">
           {filteredControls.length === 0 ? (
-            <div className="col-span-full text-center p-12 text-secondary bg-[rgba(15,23,42,0.4)] rounded-2xl border border-white/5">
+            <div className="state-card">
               {showNoZones ? 'No irrigation zones found.' : `No results for "${trimmedQuery}".`}
             </div>
           ) : (
@@ -361,7 +418,7 @@ const IrrigationPage = () => {
               const displayNumber = displayOrderMap.get(zone.irrigation_id) ?? zone.irrigation_id;
 
               return (
-              <div key={zone.irrigation_id} className={`irrigation-card ${zone.irrigation_status === 'On' ? 'is-active' : ''} weather-${zone.weather_condition.toLowerCase()}`}>
+              <div key={zone.irrigation_id} className={`irrigation-card ${zone.irrigation_status === 'On' ? 'is-active' : ''} weather-${(zone.weather_condition || 'cloudy').toLowerCase()}`}>
                 <button
                   className="irrigation-remove-icon"
                   onClick={() => removeZone(zone, displayNumber)}
