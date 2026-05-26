@@ -6,33 +6,407 @@
   min-height: 100%;
   background-color: transparent;
   background-image:
-    linear-gradient(180deg, rgba(6, 8, 13, 0.5) 0%, rgba(6, 8, 13, 0.5) 100%),
+    linear-gradient(180deg, rgba(6, 8, 13, 0.6) 0%, rgba(6, 8, 13, 0.6) 100%),
     url('../../assets/payroll.webp');
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
 }
 
-@media (max-width: 1200px) {
-  .payroll-page {
-    padding: 24px;
+/* Modal customizations */
+.payroll-run-modal-content {
+  max-width: 850px;
+  max-height: 95vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.payroll-configs {
+  padding: 16px;
+  border-radius: 12px;
+  margin-bottom: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.payroll-configs h4 {
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--accent);
+  letter-spacing: 0.5px;
+  margin-bottom: 12px;
+}
+
+.configs-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+/* Worker runs styling */
+.worker-runs-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.worker-runs-container h4 {
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--accent);
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+
+.worker-scroll-list {
+  max-height: 320px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-right: 8px;
+}
+
+.worker-run-card {
+  display: grid;
+  grid-template-columns: 1.5fr 2fr 1.5fr;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(30, 41, 59, 0.25);
+  transition: all 0.2s;
+}
+
+.worker-run-card:hover {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(30, 41, 59, 0.35);
+}
+
+.w-info-block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.w-name-label {
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: #fff;
+}
+
+.w-meta-label {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.w-inputs-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.inline-group {
+  margin-bottom: 0 !important;
+  gap: 4px !important;
+}
+
+.inline-group label {
+  font-size: 0.7rem !important;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  letter-spacing: 0.3px;
+}
+
+.inline-group input {
+  padding: 6px 10px !important;
+  font-size: 0.85rem !important;
+  text-align: center;
+}
+
+.w-preview-calculations {
+  padding: 10px 12px;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.75rem;
+}
+
+.calc-stat {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* Receipt Modal Styles */
+.receipt-modal-content {
+  max-width: 680px;
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  box-shadow: 0 20px 50px rgba(16, 185, 129, 0.1);
+}
+
+.printable-payslip-area {
+  padding: 32px;
+  background: rgba(10, 15, 26, 0.95);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.company-title {
+  font-size: 1.6rem;
+  font-weight: 900;
+  letter-spacing: -0.5px;
+}
+
+.company-sub {
+  font-size: 0.85rem;
+  color: var(--accent);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.company-address {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.payslip-badge-paid {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  font-size: 0.8rem;
+  font-weight: 800;
+  padding: 6px 16px;
+  border-radius: 999px;
+  letter-spacing: 1px;
+  display: inline-block;
+}
+
+.pay-id {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.pay-date {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.meta-label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: 0.8px;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.meta-val {
+  margin-bottom: 2px;
+}
+
+.card-label-earnings,
+.card-label-deductions {
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+
+.financial-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85rem;
+}
+
+.payslip-summary-box {
+  background: rgba(16, 185, 129, 0.05);
+  border: 1px solid rgba(16, 185, 129, 0.1);
+  border-radius: 12px;
+  padding: 16px 20px;
+}
+
+.net-pay-label {
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: var(--accent-light);
+  letter-spacing: 1px;
+}
+
+/* Standard scrollbar for modal */
+.worker-scroll-list::-webkit-scrollbar {
+  width: 4px;
+}
+.worker-scroll-list::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.1);
+}
+.worker-scroll-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+}
+
+/* ==========================================================================
+   Print Stylesheet
+   ========================================================================== */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  
+  .receipt-modal-overlay,
+  .receipt-modal-overlay * {
+    visibility: visible;
+  }
+  
+  .receipt-modal-overlay {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: auto;
+    background: white !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+  
+  .receipt-modal-content {
+    border: none !important;
+    box-shadow: none !important;
+    background: white !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  
+  .printable-payslip-area {
+    background: white !important;
+    color: black !important;
+    padding: 20px !important;
+    border: none !important;
+  }
+  
+  .company-title {
+    color: black !important;
+    -webkit-text-fill-color: black !important;
+  }
+  
+  .company-sub,
+  .net-pay-label {
+    color: #059669 !important;
+  }
+  
+  .payslip-badge-paid {
+    background: #e6f4ea !important;
+    color: #137333 !important;
+    border: 1px solid #137333 !important;
+  }
+  
+  .payslip-meta-grid {
+    background: #f8f9fa !important;
+    color: black !important;
+    border: 1px solid #dadce0 !important;
+  }
+  
+  .payslip-meta-grid * {
+    color: black !important;
+  }
+  
+  .card-label-earnings,
+  .card-label-deductions,
+  .payslip-financial-card h4 {
+    color: black !important;
+    border-bottom: 2px solid black !important;
+  }
+  
+  .financial-row,
+  .financial-row * {
+    color: black !important;
+  }
+  
+  .text-red-400 {
+    color: #c5221f !important;
+  }
+  
+  .font-bold,
+  .text-white {
+    color: black !important;
+  }
+  
+  .payslip-summary-box {
+    background: #e6f4ea !important;
+    border: 2px solid #137333 !important;
+  }
+  
+  .net-pay-value {
+    color: #137333 !important;
+  }
+  
+  .hide-on-print {
+    display: none !important;
+    height: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: none !important;
+  }
+  
+  .modal-footer {
+    display: none !important;
+  }
+  
+  ::-webkit-scrollbar {
+    display: none !important;
   }
 }
 
-@media (max-width: 1024px) {
-  .payroll-page {
-    padding: 20px;
-  }
-}
-
+/* ==========================================================================
+   Responsive modifications for interactive payroll
+   ========================================================================== */
 @media (max-width: 768px) {
-  .payroll-page {
+  .configs-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  
+  .worker-run-card {
+    grid-template-columns: 1fr;
+    gap: 12px;
     padding: 16px;
   }
-}
-
-@media (max-width: 480px) {
-  .payroll-page {
-    padding: 12px;
+  
+  .w-inputs-row {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  
+  .payslip-financial-split {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+  
+  .payslip-financial-card {
+    border-left: none !important;
+    padding-left: 0 !important;
+  }
+  
+  .printable-payslip-area {
+    padding: 16px;
+  }
+  
+  .payslip-summary-box {
+    flex-direction: column;
+    gap: 12px;
+  }
+  
+  .payslip-summary-box .text-right {
+    text-align: left;
   }
 }

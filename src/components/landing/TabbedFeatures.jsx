@@ -101,7 +101,7 @@ const tabs = [
   }
 ];
 
-const TabbedFeatures = () => {
+const TabbedFeatures = ({ onOpenTour }) => {
   const [active, setActive] = useState('dashboard');
   const current = tabs.find(t => t.id === active);
 
@@ -124,8 +124,8 @@ const TabbedFeatures = () => {
         <div className="tabbed-text">
           <h3>{current.title}</h3>
           <p>{current.description}</p>
-          <button className="btn btn-outline">
-            Learn More <ArrowRight size={16} />
+          <button className="btn btn-outline flex items-center gap-2" onClick={onOpenTour}>
+            Launch Interactive Tour <ArrowRight size={16} />
           </button>
         </div>
         <div className="tabbed-visual">

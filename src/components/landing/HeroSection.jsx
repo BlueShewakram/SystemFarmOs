@@ -1,7 +1,7 @@
 import { ArrowRight, Play, Droplets, Users, TrendingUp, Zap, Shield } from 'lucide-react';
 import './HeroSection.css';
 
-const HeroSection = () => {
+const HeroSection = ({ onOpenTour }) => {
   return (
     <section className="hero">
       {/* Ambient background effects */}
@@ -17,7 +17,7 @@ const HeroSection = () => {
         <div className="hero-content fade-up">
           <div className="hero-badge glass-subtle">
             <Zap size={14} />
-            <span>Now with AI-Powered Automation</span>
+            <span>Interactive Operational System</span>
           </div>
 
           <h1 className="hero-title">
@@ -27,7 +27,7 @@ const HeroSection = () => {
           </h1>
 
           <p className="hero-description">
-            Automate irrigation, manage workers, assign tasks intelligently, and track payroll - all from one unified, powerful platform built for modern agriculture.
+            Coordinate worker rates, optimize tasks automatically, monitor sprinkler controls, and calculate government-deductions payroll - all from one cohesive, high-performance platform.
           </p>
 
           <div className="hero-actions">
@@ -35,26 +35,26 @@ const HeroSection = () => {
               Get Started Now
               <ArrowRight size={18} />
             </a>
-            <button className="btn btn-outline btn-lg">
+            <button className="btn btn-outline btn-lg" onClick={onOpenTour}>
               <Play size={16} />
-              Watch Demo
+              Interactive Sandbox Demo
             </button>
           </div>
 
           <div className="hero-stats">
             <div className="hero-stat">
-              <span className="stat-number">2,400+</span>
-              <span className="stat-label">Active Farms</span>
+              <span className="stat-number">Active</span>
+              <span className="stat-label">Weather Sync</span>
             </div>
             <div className="stat-divider"></div>
             <div className="hero-stat">
-              <span className="stat-number">98.7%</span>
-              <span className="stat-label">Uptime</span>
+              <span className="stat-number">Smart</span>
+              <span className="stat-label">Auto-Assign</span>
             </div>
             <div className="stat-divider"></div>
             <div className="hero-stat">
-              <span className="stat-number">35%</span>
-              <span className="stat-label">Cost Reduction</span>
+              <span className="stat-number">Compliant</span>
+              <span className="stat-label">PH Payroll</span>
             </div>
           </div>
         </div>
@@ -68,7 +68,7 @@ const HeroSection = () => {
                 <span style={{background:'#f59e0b'}}></span>
                 <span style={{background:'#10b981'}}></span>
               </div>
-              <span className="vis-toolbar-title">FarmOS Dashboard</span>
+              <span className="vis-toolbar-title">FarmOS Dashboard Preview</span>
               <div></div>
             </div>
             <div className="vis-body">
@@ -96,8 +96,8 @@ const HeroSection = () => {
               <Droplets size={18} />
             </div>
             <div className="fc-info">
-              <span className="fc-label">Irrigation</span>
-              <span className="fc-value fc-active">Active</span>
+              <span className="fc-label">Auto-Irrigation</span>
+              <span className="fc-value fc-active">Weather-Sync</span>
             </div>
           </div>
 
@@ -107,8 +107,8 @@ const HeroSection = () => {
               <Users size={18} />
             </div>
             <div className="fc-info">
-              <span className="fc-label">Workers Online</span>
-              <span className="fc-value">24 / 30</span>
+              <span className="fc-label">Smart Assignment</span>
+              <span className="fc-value text-gradient-accent">Auto-Balanced</span>
             </div>
           </div>
 
@@ -118,8 +118,8 @@ const HeroSection = () => {
               <TrendingUp size={18} />
             </div>
             <div className="fc-info">
-              <span className="fc-label">Yield</span>
-              <span className="fc-value text-gradient-accent">+24.5%</span>
+              <span className="fc-label">PH Payroll Deductions</span>
+              <span className="fc-value">SSS/PhilHealth/PagIBIG</span>
             </div>
           </div>
 

@@ -72,13 +72,14 @@ const features = [
         <div className="payroll-row"><span className="pay-label">SSS</span><span className="pay-value deduct">- PHP 450</span></div>
         <div className="payroll-row"><span className="pay-label">PhilHealth</span><span className="pay-value deduct">- PHP 200</span></div>
         <div className="payroll-divider"></div>
+        <div className="payroll-divider"></div>
         <div className="payroll-row total"><span className="pay-label">Net Pay</span><span className="pay-value net">PHP 17,850</span></div>
       </div>
     )
   }
 ];
 
-const ZigzagFeatures = () => {
+const ZigzagFeatures = ({ onOpenTour }) => {
   return (
     <div className="zigzag">
       {features.map((f, i) => (
@@ -94,6 +95,9 @@ const ZigzagFeatures = () => {
                 <li key={j}><CheckCircle2 size={16} className={`bullet-check ${f.color}`} />{b}</li>
               ))}
             </ul>
+            <button className="btn btn-outline btn-sm mt-6 flex items-center gap-2" onClick={onOpenTour}>
+              Try Feature Interactively <Sparkles size={12} className={`zm-sparkle ${f.color}`} />
+            </button>
           </div>
 
           <div className="zigzag-visual fade-up" style={{animationDelay: `${i * 0.15 + 0.1}s`}}>

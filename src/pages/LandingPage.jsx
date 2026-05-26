@@ -1,28 +1,40 @@
+import { useState } from 'react';
 import HeroSection from '../components/landing/HeroSection';
 import ZigzagFeatures from '../components/landing/ZigzagFeatures';
 import TabbedFeatures from '../components/landing/TabbedFeatures';
+import InteractiveTourModal from '../components/landing/InteractiveTourModal';
 import farmvid from '../assets/farmvid.mp4';
 import './LandingPage.css';
 
 const LandingPage = () => {
+  const [isTourOpen, setIsTourOpen] = useState(false);
+
   return (
     <div className="landing-page">
       <video className="landing-video-bg" autoPlay muted loop playsInline>
         <source src={farmvid} type="video/mp4" />
       </video>
       <div className="landing-video-overlay"></div>
+      
       <nav className="landing-nav glass-panel">
         <div className="container nav-container">
           <div className="logo text-gradient-accent">FarmOS</div>
           <div className="nav-links">
             <a href="#features">Features</a>
+            <button 
+              className="btn btn-secondary btn-sm"
+              onClick={() => setIsTourOpen(true)}
+              style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: 'white' }}
+            >
+              Interactive Tour
+            </button>
             <a href="/auth" className="btn btn-secondary btn-sm">Login</a>
           </div>
         </div>
       </nav>
 
       <main>
-        <HeroSection />
+        <HeroSection onOpenTour={() => setIsTourOpen(true)} />
         
         <section id="features" className="section bg-secondary">
           <div className="container">
@@ -30,7 +42,7 @@ const LandingPage = () => {
               <h2 className="text-gradient">Smart Farm Management</h2>
               <p className="text-secondary">Everything you need to run your farm efficiently.</p>
             </div>
-            <ZigzagFeatures />
+            <ZigzagFeatures onOpenTour={() => setIsTourOpen(true)} />
           </div>
         </section>
 
@@ -40,7 +52,7 @@ const LandingPage = () => {
               <h2 className="text-gradient">Automate Your Workflow</h2>
               <p className="text-secondary">Let the system handle the tedious tasks.</p>
             </div>
-            <TabbedFeatures />
+            <TabbedFeatures onOpenTour={() => setIsTourOpen(true)} />
           </div>
         </section>
       </main>
@@ -50,9 +62,11 @@ const LandingPage = () => {
           <p className="text-secondary text-center">Copyright 2026 FarmOS. All rights reserved.</p>
         </div>
       </footer>
+
+      {/* Interactive simulated sandbox tour */}
+      <InteractiveTourModal isOpen={isTourOpen} onClose={() => setIsTourOpen(false)} />
     </div>
   );
 };
 
 export default LandingPage;
-
